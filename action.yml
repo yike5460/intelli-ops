@@ -1,0 +1,14 @@
+name: 'Intelligent Code Review using AWS Bedrock'
+description: 'Perform code review using AWS Bedrock API'
+inputs:
+  github-token:
+    description: 'GitHub token'
+    required: true
+  aws-region:
+    description: 'AWS Region'
+    required: true
+    default: 'us-east-1'
+runs:
+  using: 'node16'
+  # The index.js file in the intelligent-code-review action no longer needs to explicitly set AWS credentials. It will use the credentials set up by the configure-aws-credentials action
+  main: 'index.js'
