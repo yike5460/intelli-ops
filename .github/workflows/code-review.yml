@@ -26,6 +26,13 @@ jobs:
       run: npm ci
       shell: bash
 
+    # check if required dependencies @actions/core and @actions/github are installed
+    - name: Check if required dependencies are installed
+      run: |
+        npm list @actions/core
+        npm list @actions/github
+      shell: bash
+
     # assume the specified IAM role and set up the AWS credentials for use in subsequent steps.
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -34,7 +41,7 @@ jobs:
         aws-region: us-east-1
 
     - name: Code review using AWS Bedrock
-      uses: yike5460/intelli-ops@v2
+      uses: yike5460/intelli-ops@v1
       with:
         # Automatic Provision: The GITHUB_TOKEN is automatically created and provided by GitHub for each workflow run. You don't need to manually create or store this token as a secret.
         github-token: ${{ secrets.GITHUB_TOKEN }}
