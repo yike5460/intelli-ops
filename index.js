@@ -1,8 +1,3 @@
-// import core from '@actions/core';
-// import { getOctokit, context } from '@actions/github';
-// // import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
-// const { BedrockRuntimeClient, InvokeModelCommand } = await import("@aws-sdk/client-bedrock-runtime");
-
 const core = require('@actions/core');
 const { getOctokit, context } = require('@actions/github');
 const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");

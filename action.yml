@@ -14,4 +14,5 @@ runs:
   # main: 'index.js'
   steps:
   - run: npm ci
-  - run: node index.js
+  # - run: node index.js
+  - run: npx ts-node index.ts
