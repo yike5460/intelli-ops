@@ -5,8 +5,8 @@ const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-be
 async function run() {
   try {
     // Get inputs
-    const githubToken = core.getInput('github-token');
-    const awsRegion = core.getInput('aws-region');
+    const githubToken = core.getInput('github-token', { required: true });
+    const awsRegion = core.getInput('aws-region', { required: true });
 
     // Configure AWS SDK
     const client = new BedrockRuntimeClient({ region: awsRegion });
