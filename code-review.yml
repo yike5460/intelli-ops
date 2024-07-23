@@ -20,7 +20,7 @@ jobs:
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::123456789100:role/my-github-actions-role
+        role-to-assume: arn:aws:iam::705247044519:role/GitHub-Workflow-OIDC-Role-bHb9ZhppJUj8
         aws-region: us-east-1
 
     - name: Code review using AWS Bedrock
