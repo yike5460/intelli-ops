@@ -10,5 +10,6 @@ inputs:
     default: 'us-east-1'
 runs:
   using: 'node20'
+  pre: 'npm ci'  # This will install dependencies before running the action
   # The index.js file in the intelligent-code-review action no longer needs to explicitly set AWS credentials. It will use the credentials set up by the configure-aws-credentials action
   main: 'index.js'
