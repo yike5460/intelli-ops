@@ -1,6 +1,7 @@
 name: Intelligent Code Review
-
+# Enable manual trigger
 on:
+  workflow_dispatch:
   pull_request:
     types: [opened, synchronize]
 
