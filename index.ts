@@ -13,8 +13,12 @@ async function run(): Promise<void> {
     const githubToken = core.getInput('github-token');
     const awsRegion = core.getInput('aws-region');
 
-    // Configure AWS SDK
-    const client = new BedrockRuntimeClient({ region: awsRegion });
+    // Log inputs
+    console.log(`GitHub Token: ${githubToken}`);
+    console.log(`AWS Region: ${awsRegion}`);
+
+    // Configure AWS SDK, set region to us-east-1 if not provided
+    const client = new BedrockRuntimeClient({ region: awsRegion || 'us-east-1' });
 
     const octokit = getOctokit(githubToken);
 
@@ -64,6 +68,7 @@ async function run(): Promise<void> {
                 }],
               },
             ],
+            awsRegion: awsRegion,
           };
 
           // Invoke Claude with the payload
