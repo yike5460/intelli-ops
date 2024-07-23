@@ -1,6 +1,6 @@
+import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 const core = require('@actions/core');
 const github = require('@actions/github');
-const AWS = require('aws-sdk');
 
 async function run() {
   try {
@@ -8,28 +8,23 @@ async function run() {
     const githubToken = core.getInput('github-token');
     const awsRegion = core.getInput('aws-region');
 
-    // Log inputs
-    core.info(`GitHub Token: ${githubToken}`);
-    core.info(`AWS Region: ${awsRegion}`);
+    // Configure AWS SDK
+    const client = new BedrockRuntimeClient({ region: awsRegion });
 
-    // AWS SDK will use the credentials set by configure-aws-credentials action
-    AWS.config.update({ region: awsRegion });
-
-    const bedrock = new AWS.BedrockRuntime();
     const octokit = github.getOctokit(githubToken);
 
     // Get PR details
     const { pull_request } = github.context.payload;
     const repo = github.context.repo;
 
+    // Log PR details
+    console.log(`Reviewing PR #${pull_request.number} in ${repo.owner}/${repo.repo}`);
+
     // Get changed files
     const { data: files } = await octokit.rest.pulls.listFiles({
       ...repo,
       pull_number: pull_request.number,
     });
-
-    // Log changed files
-    core.info(`Changed files: ${files.map(file => file.filename).join(', ')}`);
 
     let reviewComments = [];
 
@@ -44,23 +39,39 @@ async function run() {
         const fileContent = Buffer.from(content.content, 'base64').toString();
         
         // Log file content
-        core.info(`File content: ${fileContent}`);
+        console.log(`File: ${file.filename}`);
 
-        // Perform code review using AWS Bedrock
-        const params = {
-          modelId: "anthropic.claude-v2",
-          contentType: "application/json",
-          accept: "application/json",
-          body: JSON.stringify({
-            prompt: `Please review the following code and provide constructive feedback:\n\n${fileContent}\n\nCode review:`,
-            max_tokens_to_sample: 500,
-            temperature: 0.7,
-            top_p: 1,
-          })
+        // Prepare the payload for the model
+        const payload = {
+          anthropic_version: "bedrock-2023-05-31",
+          max_tokens: 1000,
+          messages: [
+            {
+              role: "user",
+              content: [{ 
+                type: "text",
+                text: `Please review the following code and provide constructive feedback:\n\n${fileContent}\n\nCode review:`
+              }],
+            },
+          ],
         };
 
-        const bedrockResponse = await bedrock.invokeModel(params).promise();
-        const review = JSON.parse(bedrockResponse.body).completion;
+        // Invoke Claude with the payload
+        const command = new InvokeModelCommand({
+          modelId: "anthropic.claude-3-haiku-20240307-v1:0",
+          contentType: "application/json",
+          body: JSON.stringify(payload),
+        });
+
+        const apiResponse = await client.send(command);
+
+        // Decode and process the response
+        const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
+        const responseBody = JSON.parse(decodedResponseBody);
+        const review = responseBody.content[0].text;
+
+        // Log review
+        console.log(`Review: ${review}`);
 
         reviewComments.push({
           path: file.filename,
