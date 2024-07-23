@@ -1,6 +1,6 @@
+import core from '@actions/core';
+import { getOctokit, context } from '@actions/github';
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
-const core = require('@actions/core');
-const github = require('@actions/github');
 
 async function run() {
   try {
@@ -11,11 +11,11 @@ async function run() {
     // Configure AWS SDK
     const client = new BedrockRuntimeClient({ region: awsRegion });
 
-    const octokit = github.getOctokit(githubToken);
+    const octokit = getOctokit(githubToken);
 
     // Get PR details
-    const { pull_request } = github.context.payload;
-    const repo = github.context.repo;
+    const { pull_request } = context.payload;
+    const repo = context.repo;
 
     // Log PR details
     console.log(`Reviewing PR #${pull_request.number} in ${repo.owner}/${repo.repo}`);
