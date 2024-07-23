@@ -31,8 +31,15 @@ async function run(): Promise<void> {
 
     // Configure AWS SDK
     const client = new BedrockRuntimeClient({ region: awsRegion || 'us-east-1' });
-
     const octokit = getOctokit(githubToken);
+
+    // Check if we're in a pull request context
+    if (!context.payload.pull_request) {
+      console.log('No pull request found in the context. This action should be run only on pull request events.');
+      console.log('Event name:', context.eventName);
+      console.log('Action:', context.action);
+      return;
+    }
 
     // Check if we're in a pull request context
     if (!context.payload.pull_request) {
