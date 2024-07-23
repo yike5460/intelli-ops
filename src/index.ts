@@ -50,7 +50,7 @@ async function run(): Promise<void> {
         const { data: content } = await octokit.rest.repos.getContent({
           ...repo,
           path: file.filename,
-          ref: pull_request.head.sha,
+          ref: pull_request['head'],
         });
 
         if ('content' in content) {
