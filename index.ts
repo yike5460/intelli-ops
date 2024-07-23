@@ -14,8 +14,12 @@ async function run(): Promise<void> {
     const awsRegion = core.getInput('aws-region');
 
     // Log inputs
-    console.log(`GitHub Token: ${githubToken}`);
+    console.log(`GitHub Token: ${githubToken ? 'Token is set' : 'Token is not set'}`);
     console.log(`AWS Region: ${awsRegion}`);
+
+    if (!githubToken) {
+        throw new Error('GitHub token is not set');
+    }
 
     // Configure AWS SDK, set region to us-east-1 if not provided
     const client = new BedrockRuntimeClient({ region: awsRegion || 'us-east-1' });
