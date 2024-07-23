@@ -8,6 +8,10 @@ async function run() {
     const githubToken = core.getInput('github-token');
     const awsRegion = core.getInput('aws-region');
 
+    // Log inputs
+    core.info(`GitHub Token: ${githubToken}`);
+    core.info(`AWS Region: ${awsRegion}`);
+
     // AWS SDK will use the credentials set by configure-aws-credentials action
     AWS.config.update({ region: awsRegion });
 
@@ -24,6 +28,9 @@ async function run() {
       pull_number: pull_request.number,
     });
 
+    // Log changed files
+    core.info(`Changed files: ${files.map(file => file.filename).join(', ')}`);
+
     let reviewComments = [];
 
     for (const file of files) {
@@ -35,6 +42,9 @@ async function run() {
         });
 
         const fileContent = Buffer.from(content.content, 'base64').toString();
+        
+        // Log file content
+        core.info(`File content: ${fileContent}`);
 
         // Perform code review using AWS Bedrock
         const params = {
