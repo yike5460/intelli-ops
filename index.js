@@ -1,6 +1,7 @@
 import core from '@actions/core';
 import { getOctokit, context } from '@actions/github';
-import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
+// import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
+const { BedrockRuntimeClient, InvokeModelCommand } = await import("@aws-sdk/client-bedrock-runtime");
 
 async function run() {
   try {
@@ -94,3 +95,21 @@ async function run() {
 }
 
 run();
+
+// add sample code to test the workflow
+
+async function test() {
+  const githubToken = core.getInput('github-token');
+  const octokit = getOctokit(githubToken);
+  const repo = context.repo;
+
+  const { data: pullRequests } = await octokit.rest.pulls.list({
+    ...repo,
+    state: 'open',
+  });
+
+  for (const pr of pullRequests) {
+    console.log(`PR #${pr.number}: ${pr.title}`);
+  }
+}
+
