@@ -7,40 +7,50 @@ interface ReviewComment {
   body: string;
 }
 
+interface PullRequest {
+  number: number;
+  head: {
+    sha: string;
+  };
+}
+
 async function run(): Promise<void> {
   try {
     // Get inputs
     const githubToken = core.getInput('github-token');
     const awsRegion = core.getInput('aws-region');
 
-    // Log inputs
+    // Log inputs and context
     console.log(`GitHub Token: ${githubToken ? 'Token is set' : 'Token is not set'}`);
     console.log(`AWS Region: ${awsRegion}`);
+    console.log('GitHub context:', JSON.stringify(context, null, 2));
 
     if (!githubToken) {
-        throw new Error('GitHub token is not set');
+      throw new Error('GitHub token is not set');
     }
 
-    // Configure AWS SDK, set region to us-east-1 if not provided
+    // Configure AWS SDK
     const client = new BedrockRuntimeClient({ region: awsRegion || 'us-east-1' });
 
     const octokit = getOctokit(githubToken);
 
-    // Get PR details
-    const { pull_request } = context.payload;
-    const repo = context.repo;
-
-    if (!pull_request) {
-      throw new Error('No pull request found in the context');
+    // Check if we're in a pull request context
+    if (!context.payload.pull_request) {
+      console.log('No pull request found in the context. This action should be run only on pull request events.');
+      return;
     }
 
+    // const pullRequest = context.payload.pull_request;
+    const pullRequest = context.payload.pull_request as PullRequest;
+    const repo = context.repo;
+
     // Log PR details
-    console.log(`Reviewing PR #${pull_request.number} in ${repo.owner}/${repo.repo}`);
+    console.log(`Reviewing PR #${pullRequest.number} in ${repo.owner}/${repo.repo}`);
 
     // Get changed files
     const { data: files } = await octokit.rest.pulls.listFiles({
       ...repo,
-      pull_number: pull_request.number,
+      pull_number: pullRequest.number,
     });
 
     let reviewComments: ReviewComment[] = [];
@@ -50,14 +60,13 @@ async function run(): Promise<void> {
         const { data: content } = await octokit.rest.repos.getContent({
           ...repo,
           path: file.filename,
-          ref: pull_request['head'],
+          ref: pullRequest.head.sha,
         });
 
         if ('content' in content) {
           const fileContent = Buffer.from(content.content, 'base64').toString();
         
-          // Log file content
-          console.log(`File: ${file.filename}`);
+          console.log(`Reviewing file: ${file.filename}`);
 
           // Prepare the payload for the model
           const payload = {
@@ -72,7 +81,6 @@ async function run(): Promise<void> {
                 }],
               },
             ],
-            awsRegion: awsRegion,
           };
 
           // Invoke Claude with the payload
@@ -89,8 +97,7 @@ async function run(): Promise<void> {
           const responseBody = JSON.parse(decodedResponseBody);
           const review = responseBody.content[0].text;
 
-          // Log review
-          console.log(`Review: ${review}`);
+          console.log(`Review for ${file.filename}: ${review.substring(0, 100)}...`);
 
           reviewComments.push({
             path: file.filename,
@@ -103,14 +110,17 @@ async function run(): Promise<void> {
     // Post review comments
     await octokit.rest.pulls.createReview({
       ...repo,
-      pull_number: pull_request.number,
+      pull_number: pullRequest.number,
       event: 'COMMENT',
       comments: reviewComments,
     });
 
+    console.log('Code review completed successfully.');
+
   } catch (error) {
     if (error instanceof Error) {
-      core.setFailed(error.message);
+      core.setFailed(`Error: ${error.message}`);
+      console.error('Stack trace:', error.stack);
     } else {
       core.setFailed('An unknown error occurred');
     }
