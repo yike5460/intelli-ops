@@ -105,6 +105,12 @@ async function run(): Promise<void> {
 
         const fileContent = changedLines.join('\n');
 
+        // Split the file content into chunks if it exceeds the maximum token limit
+        const chunks = splitContentIntoChunks(fileContent, 4096);
+        if (chunks.length > 1) {
+          console.log(`File content exceeds the maximum token limit. Splitting into ${chunks.length} chunks.`);
+        }
+
         const payload = {
           anthropic_version: "bedrock-2023-05-31",
           max_tokens: 4096,
