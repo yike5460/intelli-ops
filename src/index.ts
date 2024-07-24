@@ -22,6 +22,25 @@ interface PullFile {
   patch?: string;
 }
 
+function splitContentIntoChunks(content: string, maxChunkSize: number): string[] {
+  const chunks: string[] = [];
+  let currentChunk = '';
+
+  content.split('\n').forEach(line => {
+    if (currentChunk.length + line.length > maxChunkSize) {
+      chunks.push(currentChunk);
+      currentChunk = '';
+    }
+    currentChunk += line + '\n';
+  });
+
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
 async function run(): Promise<void> {
   try {
     const githubToken = core.getInput('github-token');
@@ -88,7 +107,7 @@ async function run(): Promise<void> {
 
         const payload = {
           anthropic_version: "bedrock-2023-05-31",
-          max_tokens: 1000,
+          max_tokens: 4096,
           messages: [
             {
               role: "user",
@@ -101,7 +120,7 @@ async function run(): Promise<void> {
         };
 
         const command = new InvokeModelCommand({
-          modelId: "anthropic.claude-3-haiku-20240307-v1:0",
+          modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
           contentType: "application/json",
           body: JSON.stringify(payload),
         });

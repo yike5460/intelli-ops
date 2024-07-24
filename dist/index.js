@@ -33,6 +33,21 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(2186));
 const github_1 = __nccwpck_require__(5438);
 const client_bedrock_runtime_1 = __nccwpck_require__(9687);
+function splitContentIntoChunks(content, maxChunkSize) {
+    const chunks = [];
+    let currentChunk = '';
+    content.split('\n').forEach(line => {
+        if (currentChunk.length + line.length > maxChunkSize) {
+            chunks.push(currentChunk);
+            currentChunk = '';
+        }
+        currentChunk += line + '\n';
+    });
+    if (currentChunk) {
+        chunks.push(currentChunk);
+    }
+    return chunks;
+}
 async function run() {
     try {
         const githubToken = core.getInput('github-token');
@@ -83,7 +98,7 @@ async function run() {
                 const fileContent = changedLines.join('\n');
                 const payload = {
                     anthropic_version: "bedrock-2023-05-31",
-                    max_tokens: 1000,
+                    max_tokens: 4096,
                     messages: [
                         {
                             role: "user",
@@ -95,7 +110,7 @@ async function run() {
                     ],
                 };
                 const command = new client_bedrock_runtime_1.InvokeModelCommand({
-                    modelId: "anthropic.claude-3-haiku-20240307-v1:0",
+                    modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
                     contentType: "application/json",
                     body: JSON.stringify(payload),
                 });
