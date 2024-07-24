@@ -73,33 +73,14 @@ async function run(): Promise<void> {
 
     let reviewComments: ReviewComment[] = [];
 
-    // Fetch the full diff once
-    const { data: fullDiff } = await octokit.rest.pulls.get({
-      ...repo,
-      pull_number: pullRequest.number,
-      mediaType: {
-        format: 'diff',
-      },
-    });
-
     for (const file of files as PullFile[]) {
-      if (file.status !== 'removed') {
+      if (file.status !== 'removed' && file.patch) {
         console.log(`Reviewing file: ${file.filename}`);
 
-        // Convert fullDiff to a string
-        const fullDiffString = fullDiff.toString();
-
-        // Extract the specific file's diff from the full diff
-        const fileDiffRegex = new RegExp(`diff --git a/${file.filename} b/${file.filename}[\\s\\S]*?(?=\\ndiff --git|$)`, 'g');
-        const fileDiffMatch = fullDiffString.match(fileDiffRegex);
-
-        if (!fileDiffMatch) continue;
-
-        const fileDiff = fileDiffMatch[0];
-
-        const changedLines = fileDiff.split('\n')
-          .filter((line: string) => line.startsWith('+') && !line.startsWith('+++'))
-          .map((line: string) => line.substring(1));
+        const changedLines = file.patch
+          .split('\n')
+          .filter(line => line.startsWith('+') && !line.startsWith('+++'))
+          .map(line => line.substring(1));
 
         if (changedLines.length === 0) continue;
 
@@ -119,7 +100,7 @@ async function run(): Promise<void> {
               role: "user",
               content: [{ 
                 type: "text",
-                text: `Please review the following code changes and provide constructive feedback for each changed line:\n\n${fileContent}\n\nCode review:`
+                text: `Please review the following code changes and provide constructive feedback:\n\n${fileContent}\n\nCode review:`
               }],
             },
           ],
@@ -138,21 +119,24 @@ async function run(): Promise<void> {
 
         console.log(`Review for ${file.filename}: ${review.substring(0, 100)}...`);
 
-        // Split the review into lines
-        const reviewLines = review.split('\n');
+        // Find the line numbers of the changes in the patch
+        const lineNumbers = file.patch
+          .split('\n')
+          .reduce((acc, line, index) => {
+            if (line.startsWith('+') && !line.startsWith('+++')) {
+              acc.push(index + 1);
+            }
+            return acc;
+          }, [] as number[]);
 
-        changedLines.forEach((line: string, index: number) => {
-          const lineNumber = fileDiff.split('\n')
-            .findIndex((l: string) => l.startsWith('+') && l.substring(1) === line) + 1;
-
-          if (lineNumber > 0 && index < reviewLines.length) {
-            reviewComments.push({
-              path: file.filename,
-              body: reviewLines[index],
-              line: lineNumber,
-              side: 'RIGHT',
-            });
-          }
+        // Create a review comment for each changed line
+        lineNumbers.forEach((lineNumber, index) => {
+          reviewComments.push({
+            path: file.filename,
+            body: review,
+            line: lineNumber,
+            side: 'RIGHT',
+          });
         });
       }
     }
