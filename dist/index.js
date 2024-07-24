@@ -35,93 +35,103 @@ const github_1 = __nccwpck_require__(5438);
 const client_bedrock_runtime_1 = __nccwpck_require__(9687);
 async function run() {
     try {
-        // Get inputs
         const githubToken = core.getInput('github-token');
         const awsRegion = core.getInput('aws-region');
-        // Log inputs and context
         console.log(`GitHub Token: ${githubToken ? 'Token is set' : 'Token is not set'}`);
         console.log(`AWS Region: ${awsRegion}`);
-        console.log('GitHub context:', JSON.stringify(github_1.context, null, 2));
         if (!githubToken) {
             throw new Error('GitHub token is not set');
         }
-        // Configure AWS SDK
         const client = new client_bedrock_runtime_1.BedrockRuntimeClient({ region: awsRegion || 'us-east-1' });
         const octokit = (0, github_1.getOctokit)(githubToken);
-        // Check if we're in a pull request context
-        if (!github_1.context.payload.pull_request) {
-            console.log('No pull request found in the context. This action should be run only on pull request events.');
-            console.log('Event name:', github_1.context.eventName);
-            console.log('Action:', github_1.context.action);
-            return;
-        }
-        // Check if we're in a pull request context
         if (!github_1.context.payload.pull_request) {
             console.log('No pull request found in the context. This action should be run only on pull request events.');
             return;
         }
-        // const pullRequest = context.payload.pull_request;
         const pullRequest = github_1.context.payload.pull_request;
         const repo = github_1.context.repo;
-        // Log PR details
         console.log(`Reviewing PR #${pullRequest.number} in ${repo.owner}/${repo.repo}`);
-        // Get changed files
         const { data: files } = await octokit.rest.pulls.listFiles({
             ...repo,
             pull_number: pullRequest.number,
         });
         let reviewComments = [];
-        for (const file of files) {
-            if (file.status !== 'removed') {
-                const { data: content } = await octokit.rest.repos.getContent({
-                    ...repo,
-                    path: file.filename,
-                    ref: pullRequest.head.sha,
-                });
-                if ('content' in content) {
-                    const fileContent = Buffer.from(content.content, 'base64').toString();
-                    console.log(`Reviewing file: ${file.filename}`);
-                    // Prepare the payload for the model
-                    const payload = {
-                        anthropic_version: "bedrock-2023-05-31",
-                        max_tokens: 1000,
-                        messages: [
-                            {
-                                role: "user",
-                                content: [{
-                                        type: "text",
-                                        text: `Please review the following code and provide constructive feedback:\n\n${fileContent}\n\nCode review:`
-                                    }],
-                            },
-                        ],
-                    };
-                    // Invoke Claude with the payload
-                    const command = new client_bedrock_runtime_1.InvokeModelCommand({
-                        modelId: "anthropic.claude-3-haiku-20240307-v1:0",
-                        contentType: "application/json",
-                        body: JSON.stringify(payload),
-                    });
-                    const apiResponse = await client.send(command);
-                    // Decode and process the response
-                    const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
-                    const responseBody = JSON.parse(decodedResponseBody);
-                    const review = responseBody.content[0].text;
-                    console.log(`Review for ${file.filename}: ${review.substring(0, 100)}...`);
-                    reviewComments.push({
-                        path: file.filename,
-                        body: review,
-                    });
-                }
-            }
-        }
-        // Post review comments
-        await octokit.rest.pulls.createReview({
+        // Fetch the full diff once
+        const { data: fullDiff } = await octokit.rest.pulls.get({
             ...repo,
             pull_number: pullRequest.number,
-            event: 'COMMENT',
-            comments: reviewComments,
+            mediaType: {
+                format: 'diff',
+            },
         });
-        console.log('Code review completed successfully.');
+        for (const file of files) {
+            if (file.status !== 'removed') {
+                console.log(`Reviewing file: ${file.filename}`);
+                // Convert fullDiff to a string
+                const fullDiffString = fullDiff.toString();
+                // Extract the specific file's diff from the full diff
+                const fileDiffRegex = new RegExp(`diff --git a/${file.filename} b/${file.filename}[\\s\\S]*?(?=\\ndiff --git|$)`, 'g');
+                const fileDiffMatch = fullDiffString.match(fileDiffRegex);
+                if (!fileDiffMatch)
+                    continue;
+                const fileDiff = fileDiffMatch[0];
+                const changedLines = fileDiff.split('\n')
+                    .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+                    .map((line) => line.substring(1));
+                if (changedLines.length === 0)
+                    continue;
+                const fileContent = changedLines.join('\n');
+                const payload = {
+                    anthropic_version: "bedrock-2023-05-31",
+                    max_tokens: 1000,
+                    messages: [
+                        {
+                            role: "user",
+                            content: [{
+                                    type: "text",
+                                    text: `Please review the following code changes and provide constructive feedback for each changed line:\n\n${fileContent}\n\nCode review:`
+                                }],
+                        },
+                    ],
+                };
+                const command = new client_bedrock_runtime_1.InvokeModelCommand({
+                    modelId: "anthropic.claude-3-haiku-20240307-v1:0",
+                    contentType: "application/json",
+                    body: JSON.stringify(payload),
+                });
+                const apiResponse = await client.send(command);
+                const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
+                const responseBody = JSON.parse(decodedResponseBody);
+                const review = responseBody.content[0].text;
+                console.log(`Review for ${file.filename}: ${review.substring(0, 100)}...`);
+                // Split the review into lines
+                const reviewLines = review.split('\n');
+                changedLines.forEach((line, index) => {
+                    const lineNumber = fileDiff.split('\n')
+                        .findIndex((l) => l.startsWith('+') && l.substring(1) === line) + 1;
+                    if (lineNumber > 0 && index < reviewLines.length) {
+                        reviewComments.push({
+                            path: file.filename,
+                            body: reviewLines[index],
+                            line: lineNumber,
+                            side: 'RIGHT',
+                        });
+                    }
+                });
+            }
+        }
+        if (reviewComments.length > 0) {
+            await octokit.rest.pulls.createReview({
+                ...repo,
+                pull_number: pullRequest.number,
+                event: 'COMMENT',
+                comments: reviewComments,
+            });
+            console.log('Code review comments posted successfully.');
+        }
+        else {
+            console.log('No review comments to post.');
+        }
     }
     catch (error) {
         if (error instanceof Error) {

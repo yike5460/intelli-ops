@@ -7,7 +7,7 @@
         "prebuild": "npm install --save-dev @vercel/ncc",
         "build": "tsc -p tsconfig.build.json",
         "lint": "eslint .",
-        "package": "npm run build && ncc build --license THIRD-PARTY -o dist && copyup -E dist/THIRD-PARTY . && del-cli dist/THIRD-PARTY",
+        "package": "npm run build && ncc build --license THIRD-PARTY -o dist && copyup -E dist/THIRD-PARTY . || true && del-cli dist/THIRD-PARTY || true",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
     "keywords": [],

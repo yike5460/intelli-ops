@@ -16,13 +16,19 @@ interface ReviewComment {
   side: 'RIGHT';
 }
 
+interface PullFile {
+  filename: string;
+  status: string;
+  patch?: string;
+}
+
 async function run(): Promise<void> {
   try {
     const githubToken = core.getInput('github-token');
     const awsRegion = core.getInput('aws-region');
 
     console.log(`GitHub Token: ${githubToken ? 'Token is set' : 'Token is not set'}`);
-    console.log('GitHub context:', JSON.stringify(context, null, 2));
+    console.log(`AWS Region: ${awsRegion}`);
 
     if (!githubToken) {
       throw new Error('GitHub token is not set');
@@ -48,24 +54,33 @@ async function run(): Promise<void> {
 
     let reviewComments: ReviewComment[] = [];
 
-    for (const file of files) {
+    // Fetch the full diff once
+    const { data: fullDiff } = await octokit.rest.pulls.get({
+      ...repo,
+      pull_number: pullRequest.number,
+      mediaType: {
+        format: 'diff',
+      },
+    });
+
+    for (const file of files as PullFile[]) {
       if (file.status !== 'removed') {
         console.log(`Reviewing file: ${file.filename}`);
 
-        const { data: patch } = await octokit.rest.pulls.get({
-          ...repo,
-          pull_number: pullRequest.number,
-          mediaType: {
-            format: 'diff',
-          },
-        });
+        // Convert fullDiff to a string
+        const fullDiffString = fullDiff.toString();
 
-        const filePatch = patch.split('diff --git').find(p => p.includes(`a/${file.filename} b/${file.filename}`));
-        if (!filePatch) continue;
+        // Extract the specific file's diff from the full diff
+        const fileDiffRegex = new RegExp(`diff --git a/${file.filename} b/${file.filename}[\\s\\S]*?(?=\\ndiff --git|$)`, 'g');
+        const fileDiffMatch = fullDiffString.match(fileDiffRegex);
 
-        const changedLines = filePatch.split('\n')
-          .filter(line => line.startsWith('+') && !line.startsWith('+++'))
-          .map(line => line.substring(1));
+        if (!fileDiffMatch) continue;
+
+        const fileDiff = fileDiffMatch[0];
+
+        const changedLines = fileDiff.split('\n')
+          .filter((line: string) => line.startsWith('+') && !line.startsWith('+++'))
+          .map((line: string) => line.substring(1));
 
         if (changedLines.length === 0) continue;
 
@@ -100,11 +115,10 @@ async function run(): Promise<void> {
 
         // Split the review into lines
         const reviewLines = review.split('\n');
-        let currentLine = 0;
 
-        changedLines.forEach((line, index) => {
-          const lineNumber = file.patch!.split('\n')
-            .findIndex(l => l.startsWith('+') && l.substring(1) === line) + 1;
+        changedLines.forEach((line: string, index: number) => {
+          const lineNumber = fileDiff.split('\n')
+            .findIndex((l: string) => l.startsWith('+') && l.substring(1) === line) + 1;
 
           if (lineNumber > 0 && index < reviewLines.length) {
             reviewComments.push({
