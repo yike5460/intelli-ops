@@ -117,8 +117,6 @@ async function run(): Promise<void> {
         const responseBody = JSON.parse(decodedResponseBody);
         const review = responseBody.content[0].text;
 
-        console.log(`Review for ${file.filename}: ${review.substring(0, 100)}...`);
-
         // Find the line numbers of the changes in the patch
         const lineNumbers = file.patch
           .split('\n')
@@ -128,6 +126,8 @@ async function run(): Promise<void> {
             }
             return acc;
           }, [] as number[]);
+
+        console.log(`Review for ${file.filename}: ${review.substring(0, 100)}..., in line number: ${lineNumbers.join(', ')}`);
 
         // Create a review comment for each changed line
         lineNumbers.forEach((lineNumber, index) => {
