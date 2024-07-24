@@ -5,6 +5,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 interface ReviewComment {
   path: string;
   body: string;
+  position: number;
 }
 
 interface PullRequest {
@@ -41,13 +42,6 @@ async function run(): Promise<void> {
       return;
     }
 
-    // Check if we're in a pull request context
-    if (!context.payload.pull_request) {
-      console.log('No pull request found in the context. This action should be run only on pull request events.');
-      return;
-    }
-
-    // const pullRequest = context.payload.pull_request;
     const pullRequest = context.payload.pull_request as PullRequest;
     const repo = context.repo;
 
@@ -109,20 +103,24 @@ async function run(): Promise<void> {
           reviewComments.push({
             path: file.filename,
             body: review,
+            position: file.changes // Use the number of changes as a fallback position
           });
         }
       }
     }
 
     // Post review comments
-    await octokit.rest.pulls.createReview({
-      ...repo,
-      pull_number: pullRequest.number,
-      event: 'COMMENT',
-      comments: reviewComments,
-    });
-
-    console.log('Code review completed successfully.');
+    if (reviewComments.length > 0) {
+      await octokit.rest.pulls.createReview({
+        ...repo,
+        pull_number: pullRequest.number,
+        event: 'COMMENT',
+        comments: reviewComments,
+      });
+      console.log('Code review comments posted successfully.');
+    } else {
+      console.log('No review comments to post.');
+    }
 
   } catch (error) {
     if (error instanceof Error) {
