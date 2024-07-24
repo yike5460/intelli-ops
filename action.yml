@@ -8,7 +8,7 @@ inputs:
     description: 'AWS Region'
     required: true
     default: 'us-east-1'
+# The index.js file in the intelligent-code-review action no longer needs to explicitly set AWS credentials. It will use the credentials set up by the configure-aws-credentials action
 runs:
-  using: 'node16'
-  # The index.js file in the intelligent-code-review action no longer needs to explicitly set AWS credentials. It will use the credentials set up by the configure-aws-credentials action
-  main: 'index.js'
+  using: node20
+  main: dist/index.js
