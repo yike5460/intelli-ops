@@ -13,7 +13,6 @@ interface ReviewComment {
   path: string;
   body: string;
   position?: number;
-  side: 'RIGHT';
 }
 
 interface PullFile {
@@ -125,7 +124,6 @@ async function run(): Promise<void> {
             path: file.filename,
             body: review,
             position: position,
-            side: 'RIGHT',
           });
         }
       }

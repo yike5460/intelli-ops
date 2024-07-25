@@ -115,7 +115,6 @@ async function run() {
                         path: file.filename,
                         body: review,
                         position: position,
-                        side: 'RIGHT',
                     });
                 }
             }
