@@ -12,7 +12,7 @@ interface PullRequest {
 interface ReviewComment {
   path: string;
   body: string;
-  line: number;
+  position?: number;
   side: 'RIGHT';
 }
 
@@ -75,7 +75,7 @@ async function run(): Promise<void> {
 
     for (const file of files as PullFile[]) {
       if (file.status !== 'removed' && file.patch) {
-        console.log(`Reviewing file: ${file.filename}`);
+        console.log(`Reviewing file: ${file.filename} with file patch content: ${file.patch}`);
 
         const changedLines = file.patch
           .split('\n')
@@ -117,27 +117,17 @@ async function run(): Promise<void> {
         const responseBody = JSON.parse(decodedResponseBody);
         const review = responseBody.content[0].text;
 
-        // Find the line numbers of the changes in the patch
-        const lineNumbers = file.patch
-          .split('\n')
-          .reduce((acc, line, index) => {
-            if (line.startsWith('+') && !line.startsWith('+++')) {
-              acc.push(index + 1);
-            }
-            return acc;
-          }, [] as number[]);
+        // Calculate the position for the comment
+        const position = file.patch.split('\n').findIndex(line => line.startsWith('+') && !line.startsWith('+++')) + 1;
 
-        console.log(`Review for ${file.filename}; Partial review from Claude ${review.substring(0, 100)}...; Line number changed ${lineNumbers.join(', ')}`);
-
-        // Create a review comment for each changed line
-        lineNumbers.forEach((lineNumber, index) => {
+        if (position > 0) {
           reviewComments.push({
             path: file.filename,
             body: review,
-            line: lineNumber,
+            position: position,
             side: 'RIGHT',
           });
-        });
+        }
       }
     }
 
