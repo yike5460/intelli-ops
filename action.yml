@@ -8,6 +8,13 @@ inputs:
     description: 'AWS Region'
     required: true
     default: 'us-east-1'
+  model-id:
+    description: 'Model ID'
+    required: false
+    default: 'Claude3'
+  exclude-files:
+    description: 'Exclude file list, separated by comma, e.g. [*.md,*.json]'
+    required: false
 # The index.js file in the intelligent-code-review action no longer needs to explicitly set AWS credentials. It will use the credentials set up by the configure-aws-credentials action
 runs:
   using: 'node20'

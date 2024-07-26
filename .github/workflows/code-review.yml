@@ -54,5 +54,7 @@ jobs:
         # Automatic Provision: The GITHUB_TOKEN is automatically created and provided by GitHub for each workflow run. You don't need to manually create or store this token as a secret.
         github-token: ${{ secrets.GITHUB_TOKEN }}
         aws-region: us-east-1
+        model-id: Claude3
+        exclude-files: '*.md,*.json'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

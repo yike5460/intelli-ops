@@ -48,6 +48,12 @@ function splitContentIntoChunks(content, maxChunkSize) {
     }
     return chunks;
 }
+function shouldExcludeFile(filename, excludePatterns) {
+    return excludePatterns.some(pattern => {
+        const regex = new RegExp(`^${pattern.replace(/\*/g, '.*')}$`);
+        return regex.test(filename);
+    });
+}
 // Refer to https://google.github.io/eng-practices/review/reviewer/looking-for.html and https://google.github.io/eng-practices/review/reviewer/standard.html
 const code_review_prompt_template = `<task_context>
 You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress.
@@ -100,7 +106,7 @@ Provide feedback on these aspects, categorizing your comments as follows:
 Provide your review in the following format:
 
 Summary:
-[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes" in one of categories below]
+[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in one of the categories below]
 
 Critical Issues:
 [List any critical issues that need to be addressed]
@@ -110,9 +116,6 @@ Improvements:
 
 Nitpicks:
 [List any nitpicks or minor suggestions]
-
-Positive Feedback:
-[Mention any particularly good aspects of the code change]
 </output_format>
 
 <immediate_task>
@@ -123,8 +126,11 @@ async function run() {
     try {
         const githubToken = core.getInput('github-token');
         const awsRegion = core.getInput('aws-region');
+        const excludeFiles = core.getInput('exclude-files');
+        const excludePatterns = excludeFiles ? excludeFiles.split(',').map(p => p.trim()) : [];
         console.log(`GitHub Token: ${githubToken ? 'Token is set' : 'Token is not set'}`);
         console.log(`AWS Region: ${awsRegion}`);
+        console.log(`Excluded file patterns: ${excludePatterns.join(', ')}`);
         if (!githubToken) {
             throw new Error('GitHub token is not set');
         }
@@ -143,8 +149,8 @@ async function run() {
         });
         let reviewComments = [];
         for (const file of files) {
-            if (file.status !== 'removed' && file.patch) {
-                console.log(`Reviewing file: ${file.filename} with file patch content: ${file.patch}`);
+            if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
+                console.log(`Reviewing file: ${file.filename}`);
                 const changedLines = file.patch
                     .split('\n')
                     .filter(line => line.startsWith('+') && !line.startsWith('+++'))
@@ -152,12 +158,7 @@ async function run() {
                 if (changedLines.length === 0)
                     continue;
                 const fileContent = changedLines.join('\n');
-                // Split the file content into chunks if it exceeds the maximum token limit
                 const chunks = splitContentIntoChunks(fileContent, 4096);
-                if (chunks.length > 1) {
-                    console.log(`File content exceeds the maximum token limit. Splitting into ${chunks.length} chunks.`);
-                }
-                // format the finaly prompt passed to the model with actual input for the placeholder
                 let formattedContent = code_review_prompt_template.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
                 const payload = {
                     anthropic_version: "bedrock-2023-05-31",
@@ -181,7 +182,6 @@ async function run() {
                 const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
                 const responseBody = JSON.parse(decodedResponseBody);
                 const review = responseBody.content[0].text;
-                // Calculate the position for the comment
                 const position = file.patch.split('\n').findIndex(line => line.startsWith('+') && !line.startsWith('+++')) + 1;
                 if (position > 0) {
                     reviewComments.push({
@@ -190,6 +190,9 @@ async function run() {
                         position: position,
                     });
                 }
+            }
+            else {
+                console.log(`Skipping file: ${file.filename}`);
             }
         }
         if (reviewComments.length > 0) {
