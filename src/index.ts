@@ -40,6 +40,12 @@ function splitContentIntoChunks(content: string, maxChunkSize: number): string[]
   return chunks;
 }
 
+// preview function to allow user exclude some files e.g. *.md files from review to avoid unnecessary comments
+// function should be called before reviewComments.push
+function excludeFileFromReview(file: PullFile): boolean {
+  return file.filename.endsWith('.md');
+}
+
 // Refer to https://google.github.io/eng-practices/review/reviewer/looking-for.html and https://google.github.io/eng-practices/review/reviewer/standard.html
 const code_review_prompt_template = 
 `<task_context>
@@ -112,7 +118,6 @@ Positive Feedback:
 Please review the provided code change and provide your feedback following the guidelines and format specified above.
 </immediate_task>
 `;
-
 
 async function run(): Promise<void> {
   try {
