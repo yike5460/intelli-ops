@@ -21,6 +21,7 @@ interface PullFile {
   patch?: string;
 }
 
+// This function splits the content into chunks of maxChunkSize
 function splitContentIntoChunks(content: string, maxChunkSize: number): string[] {
   const chunks: string[] = [];
   let currentChunk = '';
@@ -48,7 +49,7 @@ function shouldExcludeFile(filename: string, excludePatterns: string[]): boolean
 }
 
 // Refer to https://google.github.io/eng-practices/review/reviewer/looking-for.html and https://google.github.io/eng-practices/review/reviewer/standard.html
-const code_review_prompt_template = 
+const detailed_review_prompt = 
 `<task_context>
 You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress.
 </task_context>
@@ -117,16 +118,50 @@ Please review the provided code change and provide your feedback following the g
 </immediate_task>
 `;
 
+const concise_review_prompt = `
+<task_context>
+You are an expert code reviewer. Review the provided code change concisely, focusing on critical issues, improvements, or nitpicks. Conclude with "Approve", "Approve with minor modifications", or "Request changes". Limit your response to 300 words.
+</task_context>
+
+<tone_context>
+Maintain a constructive and educational tone. Be thorough but not overly pedantic. Remember that the goal is continuous improvement, not perfection.
+</tone_context>
+
+<code_change>
+[Insert the code change to be reviewed, including file names and line numbers if applicable]
+</code_change>
+
+Provide your review in one of the following formats:
+
+Critical Issues:
+[List any critical issues that need to be addressed]
+
+OR
+
+Improvements:
+[List suggested improvements]
+
+OR
+
+Nitpicks:
+[List any nitpicks or minor suggestions]
+
+Conclusion: [Approve/Approve with minor modifications/Request changes]
+`;
+
 async function run(): Promise<void> {
   try {
     const githubToken = core.getInput('github-token');
     const awsRegion = core.getInput('aws-region');
+    const modelId = core.getInput('model-id');
     const excludeFiles = core.getInput('exclude-files');
+    const reviewLevel = core.getInput('review-level');
     const excludePatterns = excludeFiles ? excludeFiles.split(',').map(p => p.trim()) : [];
 
     console.log(`GitHub Token: ${githubToken ? 'Token is set' : 'Token is not set'}`);
     console.log(`AWS Region: ${awsRegion}`);
     console.log(`Excluded file patterns: ${excludePatterns.join(', ')}`);
+    console.log(`Review level: ${reviewLevel}`);
 
     if (!githubToken) {
       throw new Error('GitHub token is not set');
@@ -164,13 +199,12 @@ async function run(): Promise<void> {
         if (changedLines.length === 0) continue;
 
         const fileContent = changedLines.join('\n');
-        const chunks = splitContentIntoChunks(fileContent, 4096);
-
-        let formattedContent = code_review_prompt_template.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
+        const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
+        let formattedContent = promptTemplate.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
 
         const payload = {
           anthropic_version: "bedrock-2023-05-31",
-          max_tokens: 4096,
+          max_tokens: reviewLevel === 'concise' ? 1000 : 4096,
           messages: [
             {
               role: "user",
@@ -183,7 +217,8 @@ async function run(): Promise<void> {
         };
 
         const command = new InvokeModelCommand({
-          modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+          // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+          modelId: modelId,
           contentType: "application/json",
           body: JSON.stringify(payload),
         });

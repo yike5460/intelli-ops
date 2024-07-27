@@ -11,10 +11,14 @@ inputs:
   model-id:
     description: 'Model ID'
     required: false
-    default: 'Claude3'
+    default: 'anthropic.claude-3-sonnet-20240229-v1:0'
   exclude-files:
     description: 'Exclude file list, separated by comma, e.g. [*.md,*.json]'
     required: false
+  review-level:
+    description: 'Review level'
+    required: false
+    default: 'concise'
 # The index.js file in the intelligent-code-review action no longer needs to explicitly set AWS credentials. It will use the credentials set up by the configure-aws-credentials action
 runs:
   using: 'node20'
