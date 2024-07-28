@@ -3,6 +3,7 @@
 ## Overview
 
 This GitHub Action performs automated code reviews, PR generation and issue operation etc. using AWS Bedrock API. It can be used to automatically review code changes in pull requests and provide feedback to developers. The action can be configured to exclude certain files from the review, set the level of detail for reviews, and generate PR descriptions. The action requires an AWS account and an IAM role with the necessary permissions to invoke AWS Bedrock.
+
 ## Security Recommendations
 
 - Use GitHub's OIDC provider to authenticate with AWS instead of long-lived credentials.
