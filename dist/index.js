@@ -55,9 +55,41 @@ function shouldExcludeFile(filename, excludePatterns) {
         return regex.test(filename);
     });
 }
+async function generatePRDescription(files, octokit, repo, pullNumber) {
+    const pullRequest = github_1.context.payload.pull_request;
+    const fileChanges = await Promise.all(files.map(async (file) => {
+        const { data: content } = await octokit.rest.repos.getContent({
+            ...repo,
+            path: file.filename,
+            ref: pullRequest.head.sha,
+        });
+        return `${file.filename}: ${file.status}`;
+    }));
+    const description = `
+# Description
+
+This pull request includes the following changes:
+
+${fileChanges.join('\n')}
+
+Please include a summary of the changes and the related issue. Please also include relevant motivation and context. List any dependencies that are required for this change.
+
+Fixes # (issue)
+
+## Type of change
+
+Please delete options that are not relevant.
+
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] This change requires a documentation update
+`;
+    return description;
+}
 // Refer to https://google.github.io/eng-practices/review/reviewer/looking-for.html and https://google.github.io/eng-practices/review/reviewer/standard.html
 const detailed_review_prompt = `<task_context>
-You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress.
+You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress. Your feedback should be constructive, educational, and focused on the most important issues.
 </task_context>
 
 <tone_context>
@@ -73,6 +105,8 @@ Maintain a constructive and educational tone. Be thorough but not overly pedanti
 [Insert the code change to be reviewed, including file names and line numbers if applicable]
 </code_change>
 </background_data>
+
+Provide your review in ONLY one of the following formats, if changed code is too simple or not fitting in categories below, please answer "No review needed":
 
 <detailed_task_description>
 Review the provided code change, considering the following aspects:
@@ -107,7 +141,7 @@ Provide feedback on these aspects, categorizing your comments as follows:
 Provide your review in the following format:
 
 Summary:
-[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in one of the categories below]
+[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below, Note if changed code is too simple or not fitting in categories below, please answer "No Review Needed, LGTM!" directly. Limit your response to 200 words.]
 
 Critical Issues:
 [List any critical issues that need to be addressed]
@@ -125,7 +159,7 @@ Please review the provided code change and provide your feedback following the g
 `;
 const concise_review_prompt = `
 <task_context>
-You are an expert code reviewer. Review the provided code change concisely, focusing on critical issues, improvements, or nitpicks. Conclude with "Approve", "Approve with minor modifications", or "Request changes". Limit your response to 300 words.
+You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress. Your feedback should be constructive, educational, and focused on the most important issues.
 </task_context>
 
 <tone_context>
@@ -136,22 +170,51 @@ Maintain a constructive and educational tone. Be thorough but not overly pedanti
 [Insert the code change to be reviewed, including file names and line numbers if applicable]
 </code_change>
 
-Provide your review in one of the following formats:
+<detailed_task_description>
+Review the provided code change, considering the following aspects:
+1. Design: Evaluate the overall design and how it integrates with the existing system.
+2. Functionality: Assess if the code does what it's intended to do and if it's good for the users.
+3. Complexity: Check if the code is more complex than necessary.
+4. Tests: Verify the presence and quality of unit, integration, or end-to-end tests.
+5. Naming: Ensure clear and appropriate naming for variables, functions, and classes.
+6. Comments: Check for clear and useful comments that explain why, not what.
+7. Style: Verify adherence to the project's style guide.
+8. Documentation: Check if necessary documentation is updated or added.
+9. Potential issues: Look for possible concurrency problems, edge cases, or error handling issues.
+10. Code health: Assess if the change improves the overall code health of the system.
+
+Provide feedback on these aspects, categorizing your comments as follows:
+- Critical: Issues that must be addressed before approval.
+- Improvement: Suggestions that would significantly improve the code but aren't blocking.
+</detailed_task_description>
+
+<rules>
+1. Focus on the most important issues that affect code health and functionality.
+2. Balance the need for improvement with the need to make progress.
+3. Be specific in your feedback, referencing line numbers when applicable.
+4. Explain the reasoning behind your suggestions, especially for design-related feedback.
+5. If suggesting an alternative approach, briefly explain its benefits.
+6. Acknowledge good practices and improvements in the code.
+7. If relevant, mention any educational points that could help the developer learn, prefixed with "Learning opportunity:".
+</rules>
+
+<output_format>
+Provide your review in the following format:
+
+Summary:
+[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below, Note if changed code is too simple or not fitting in categories below, please answer "No Review Needed, LGTM!" directly. Limit your response to 200 words.]
 
 Critical Issues:
 [List any critical issues that need to be addressed]
 
-OR
-
 Improvements:
 [List suggested improvements]
 
-OR
+</output_format>
 
-Nitpicks:
-[List any nitpicks or minor suggestions]
-
-Conclusion: [Approve/Approve with minor modifications/Request changes]
+<immediate_task>
+Please review the provided code change and provide your feedback following the guidelines and format specified above.
+</immediate_task>
 `;
 async function run() {
     try {
@@ -160,11 +223,14 @@ async function run() {
         const modelId = core.getInput('model-id');
         const excludeFiles = core.getInput('exclude-files');
         const reviewLevel = core.getInput('review-level');
+        const generatePRDesc = core.getInput('generate-pr-description');
         const excludePatterns = excludeFiles ? excludeFiles.split(',').map(p => p.trim()) : [];
         console.log(`GitHub Token: ${githubToken ? 'Token is set' : 'Token is not set'}`);
         console.log(`AWS Region: ${awsRegion}`);
-        console.log(`Excluded file patterns: ${excludePatterns.join(', ')}`);
+        console.log(`Model ID: ${modelId}`);
+        console.log(`Excluded files: ${excludeFiles}`);
         console.log(`Review level: ${reviewLevel}`);
+        console.log(`Generate PR description: ${generatePRDesc ? 'Yes' : 'No'}`);
         if (!githubToken) {
             throw new Error('GitHub token is not set');
         }
@@ -181,6 +247,15 @@ async function run() {
             ...repo,
             pull_number: pullRequest.number,
         });
+        if (generatePRDesc) {
+            const prDescription = await generatePRDescription(files, octokit, repo, pullRequest.number);
+            await octokit.rest.pulls.update({
+                ...repo,
+                pull_number: pullRequest.number,
+                body: prDescription,
+            });
+            console.log('PR description updated successfully.');
+        }
         let reviewComments = [];
         for (const file of files) {
             if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {

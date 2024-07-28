@@ -19,6 +19,10 @@ inputs:
     description: 'Review level'
     required: false
     default: 'concise'
+  generate-pr-description:
+    description: 'Generate PR description'
+    required: false
+    default: 'false'
 # The index.js file in the intelligent-code-review action no longer needs to explicitly set AWS credentials. It will use the credentials set up by the configure-aws-credentials action
 runs:
   using: 'node20'
