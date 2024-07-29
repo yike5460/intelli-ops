@@ -48,6 +48,45 @@ function shouldExcludeFile(filename: string, excludePatterns: string[]): boolean
   });
 }
 
+const pr_generation_prompt =
+`
+<task context>
+You are a developer tasked with creating a pull request (PR) for a software project. Your primary goal is to provide a clear and informative description of the changes you are proposing.
+</task context>
+
+<tone context>
+Maintain a professional and informative tone. Be clear and concise in your descriptions.
+</tone context>
+
+<code_change>
+This pull request includes the following changes:
+[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]
+</code_change>
+
+<detailed_task_description>
+Please include a summary of the changes in one of the following categories:
+- Bug fix (non-breaking change which fixes an issue)
+- New feature (non-breaking change which adds functionality)
+- Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- This change requires a documentation update
+
+Please also include relevant motivation and context. List any dependencies that are required for this change.
+</detailed_task_description>
+
+<output_format>
+Provide your PR description in the following format:
+# Description
+[Insert the PR description here]
+
+## Type of change
+[Select one of the following options in the checkbox]
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] This change requires a documentation update
+</output_format>
+`;
+
 async function generatePRDescription(files: PullFile[], octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }, pullNumber: number): Promise<string> {
   const pullRequest = context.payload.pull_request as PullRequest;
   const fileChanges = await Promise.all(files.map(async (file) => {
@@ -59,26 +98,7 @@ async function generatePRDescription(files: PullFile[], octokit: ReturnType<type
     return `${file.filename}: ${file.status}`;
   }));
 
-  const description = `
-# Description
-
-This pull request includes the following changes:
-
-${fileChanges.join('\n')}
-
-Please include a summary of the changes and the related issue. Please also include relevant motivation and context. List any dependencies that are required for this change.
-
-Fixes # (issue)
-
-## Type of change
-
-Please delete options that are not relevant.
-
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] This change requires a documentation update
-`;
+  const description = pr_generation_prompt.replace('[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]', fileChanges.join('\n'));
 
   return description;
 }
@@ -135,10 +155,10 @@ Provide feedback on these aspects, categorizing your comments as follows:
 </rules>
 
 <output_format>
-Provide your review in the following format:
+Provide your review in the following format. Limit your response to 200 words. Note if changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly.
 
 Summary:
-[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below, Note if changed code is too simple or not fitting in categories below, please answer "No Review Needed, LGTM!" directly. Limit your response to 200 words.]
+[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below]
 
 Critical Issues:
 [List any critical issues that need to be addressed]
@@ -197,7 +217,7 @@ Provide feedback on these aspects, categorizing your comments as follows:
 </rules>
 
 <output_format>
-Provide your review in the following format:
+Provide your review in the following format. Limit your response to 200 words. Note if changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly.
 
 Summary:
 [Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below, Note if changed code is too simple or not fitting in categories below, please answer "No Review Needed, LGTM!" directly. Limit your response to 200 words.]
@@ -255,7 +275,34 @@ async function run(): Promise<void> {
     });
 
     if (generatePRDesc) {
-      const prDescription = await generatePRDescription(files as PullFile[], octokit, repo, pullRequest.number);
+      const prDescriptionTemplate = await generatePRDescription(files as PullFile[], octokit, repo, pullRequest.number);
+      // invoke model to generate complete PR description
+      const payload = {
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: [{
+              type: "text",
+              text: prDescriptionTemplate,
+            }],
+          },
+        ],
+      };
+
+      const command = new InvokeModelCommand({
+        // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+        modelId: modelId,
+        contentType: "application/json",
+        body: JSON.stringify(payload),
+      });
+
+      const apiResponse = await client.send(command);
+      const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
+      const responseBody = JSON.parse(decodedResponseBody);
+      const prDescription = responseBody.content[0].text;
+
       await octokit.rest.pulls.update({
         ...repo,
         pull_number: pullRequest.number,
