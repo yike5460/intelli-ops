@@ -87,6 +87,32 @@ Provide your PR description in the following format:
 </output_format>
 `;
 
+const fixed_pr_generation_template = `
+# How Has This Been Tested?
+
+Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce. Please also list any relevant details for your test configuration
+
+- [ ] Test A
+- [ ] Test B
+
+**Test Configuration**:
+* Firmware version:
+* Hardware:
+* Toolchain:
+* SDK:
+
+# Checklist:
+
+- [ ] My code follows the style guidelines of this project
+- [ ] I have performed a self-review of my code
+- [ ] I have commented my code, particularly in hard-to-understand areas
+- [ ] I have made corresponding changes to the documentation
+- [ ] My changes generate no new warnings
+- [ ] I have added tests that prove my fix is effective or that my feature works
+- [ ] New and existing unit tests pass locally with my changes
+- [ ] Any dependent changes have been merged and published in downstream modules
+`;
+
 async function generatePRDescription(files: PullFile[], octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }, pullNumber: number): Promise<string> {
   const pullRequest = context.payload.pull_request as PullRequest;
   const fileChanges = await Promise.all(files.map(async (file) => {
@@ -303,10 +329,13 @@ async function run(): Promise<void> {
       const responseBody = JSON.parse(decodedResponseBody);
       const prDescription = responseBody.content[0].text;
 
+      // append fixed template content to the generated PR description
+      const prDescriptionWithTemplate = prDescription + fixed_pr_generation_template;
+
       await octokit.rest.pulls.update({
         ...repo,
         pull_number: pullRequest.number,
-        body: prDescription,
+        body: prDescriptionWithTemplate,
       });
       console.log('PR description updated successfully.');
     }
