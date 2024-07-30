@@ -259,6 +259,56 @@ Improvements:
 Please review the provided code change and provide your feedback following the guidelines and format specified above.
 </immediate_task>
 `;
+async function invokeModel(client, modelId, payloadInput) {
+    // seperate branch to invoke RESTFul endpoint exposed by API Gateway, if the modelId is prefixed with string like "sagemaker.<api id>.execute-api.<region>.amazonaws.com/prod"
+    if (modelId.startsWith("sagemaker.")) {
+        // invoke RESTFul endpoint e.g. curl -X POST -H "Content-Type: application/json" -d '{"prompt": "import argparse\ndef main(string: str):\n    print(string)\n    print(string[::-1])\n    if __name__ == \"__main__\":", "parameters": {"max_new_tokens": 256, "temperature": 0.1}}' https://<api id>.execute-api.<region>.amazonaws.com/prod
+        const endpoint = modelId.split("sagemaker.")[1];
+        // invoke the RESTFul endpoint with the payload
+        const payload = {
+            prompt: payloadInput,
+            parameters: {
+                max_new_tokens: 256,
+                temperature: 0.1,
+            },
+        };
+        const response = await fetch(`https://${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        const responseBody = await response.json();
+        // extract the generated text from the response, the output payload should be in the format { "generated_text": "..." } using codellama model for now 
+        const finalResult = responseBody.generated_text;
+        return finalResult;
+    }
+    const payload = {
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: 4096,
+        messages: [
+            {
+                role: "user",
+                content: [{
+                        type: "text",
+                        text: payloadInput,
+                    }],
+            },
+        ],
+    };
+    const command = new client_bedrock_runtime_1.InvokeModelCommand({
+        // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+        modelId: modelId,
+        contentType: "application/json",
+        body: JSON.stringify(payload),
+    });
+    const apiResponse = await client.send(command);
+    const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
+    const responseBody = JSON.parse(decodedResponseBody);
+    const finalResult = responseBody.content[0].text;
+    return finalResult;
+}
 async function run() {
     try {
         const githubToken = core.getInput('github-token');
@@ -277,7 +327,7 @@ async function run() {
         if (!githubToken) {
             throw new Error('GitHub token is not set');
         }
-        const client = new client_bedrock_runtime_1.BedrockRuntimeClient({ region: awsRegion || 'us-east-1' });
+        const bedrockClient = new client_bedrock_runtime_1.BedrockRuntimeClient({ region: awsRegion || 'us-east-1' });
         const octokit = (0, github_1.getOctokit)(githubToken);
         if (!github_1.context.payload.pull_request) {
             console.log('No pull request found in the context. This action should be run only on pull request events.');
@@ -293,29 +343,8 @@ async function run() {
         if (generatePRDesc) {
             const prDescriptionTemplate = await generatePRDescription(files, octokit, repo, pullRequest.number);
             // invoke model to generate complete PR description
-            const payload = {
-                anthropic_version: "bedrock-2023-05-31",
-                max_tokens: 4096,
-                messages: [
-                    {
-                        role: "user",
-                        content: [{
-                                type: "text",
-                                text: prDescriptionTemplate,
-                            }],
-                    },
-                ],
-            };
-            const command = new client_bedrock_runtime_1.InvokeModelCommand({
-                // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
-                modelId: modelId,
-                contentType: "application/json",
-                body: JSON.stringify(payload),
-            });
-            const apiResponse = await client.send(command);
-            const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
-            const responseBody = JSON.parse(decodedResponseBody);
-            const prDescription = responseBody.content[0].text;
+            const payloadInput = prDescriptionTemplate;
+            const prDescription = await invokeModel(bedrockClient, modelId, payloadInput);
             // append fixed template content to the generated PR description
             const prDescriptionWithTemplate = prDescription + fixed_pr_generation_template;
             await octokit.rest.pulls.update({
@@ -338,29 +367,9 @@ async function run() {
                 const fileContent = changedLines.join('\n');
                 const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
                 let formattedContent = promptTemplate.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
-                const payload = {
-                    anthropic_version: "bedrock-2023-05-31",
-                    max_tokens: reviewLevel === 'concise' ? 1000 : 4096,
-                    messages: [
-                        {
-                            role: "user",
-                            content: [{
-                                    type: "text",
-                                    text: formattedContent,
-                                }],
-                        },
-                    ],
-                };
-                const command = new client_bedrock_runtime_1.InvokeModelCommand({
-                    // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
-                    modelId: modelId,
-                    contentType: "application/json",
-                    body: JSON.stringify(payload),
-                });
-                const apiResponse = await client.send(command);
-                const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
-                const responseBody = JSON.parse(decodedResponseBody);
-                const review = responseBody.content[0].text;
+                // invoke model to generate review comments
+                const payloadInput = formattedContent;
+                const review = await invokeModel(bedrockClient, modelId, payloadInput);
                 const position = file.patch.split('\n').findIndex(line => line.startsWith('+') && !line.startsWith('+++')) + 1;
                 if (position > 0) {
                     reviewComments.push({

@@ -11,6 +11,7 @@ inputs:
   model-id:
     description: 'Model ID'
     required: false
+    # Use specific prefix sagemaker.<api url> to specify the model hosted in AWS SageMaker
     default: 'anthropic.claude-3-sonnet-20240229-v1:0'
   exclude-files:
     description: 'Exclude file list, separated by comma, e.g. [*.md,*.json]'
