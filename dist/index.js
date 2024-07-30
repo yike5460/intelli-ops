@@ -371,7 +371,7 @@ async function run() {
                 const payloadInput = formattedContent;
                 var review = await invokeModel(bedrockClient, modelId, payloadInput);
                 // log the generated review comments and check if it is empty
-                console.log("Generated review comments: {} for file: {}", review, file.filename);
+                console.log(`Review comments ${review} generated for file: ${file.filename}`);
                 if (!review || review.trim() == '') {
                     console.log("No review comments generated for file: {}", file.filename);
                     // add default review comment
