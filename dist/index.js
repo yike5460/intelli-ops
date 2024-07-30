@@ -369,7 +369,15 @@ async function run() {
                 let formattedContent = promptTemplate.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
                 // invoke model to generate review comments
                 const payloadInput = formattedContent;
-                const review = await invokeModel(bedrockClient, modelId, payloadInput);
+                var review = await invokeModel(bedrockClient, modelId, payloadInput);
+                // log the generated review comments and check if it is empty
+                console.log("Generated review comments: {} for file: {}", review, file.filename);
+                if (!review || review.trim() == '') {
+                    console.log("No review comments generated for file: {}", file.filename);
+                    // add default review comment
+                    review = "No review needed, LGTM!";
+                    continue;
+                }
                 const position = file.patch.split('\n').findIndex(line => line.startsWith('+') && !line.startsWith('+++')) + 1;
                 if (position > 0) {
                     reviewComments.push({
