@@ -5,6 +5,10 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+    # Avoid running the same workflow on the same branch concurrently
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
 jobs:
   review:
     runs-on: ubuntu-latest
