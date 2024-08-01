@@ -261,7 +261,7 @@ Please review the provided code change and provide your feedback following the g
 </immediate_task>
 `;
 
-async function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string): Promise<string> {
+export async function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string): Promise<string> {
 
   // seperate branch to invoke RESTFul endpoint exposed by API Gateway, if the modelId is prefixed with string like "sagemaker.<api id>.execute-api.<region>.amazonaws.com/prod"
   if (modelId.startsWith("sagemaker.")) {
