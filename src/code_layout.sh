@@ -1,6 +1,7 @@
 #!/bin/bash
-# Usage: ./dump_contents.sh [repository_directory] [output_file] [file_extensions...]
-# e.g. ./dump_contents.sh my_code my_output.txt py js
+# Usage: ./code_layout.sh [REPO_DIR] [OUTPUT_FILE] [FILE_EXTENSIONS]
+# Description: Combine all code files in a repository into a single file
+# Example: ./code_layout.sh ~/projects/my_project combined_code_dump.txt py js html css java cpp h cs
 
 # Directory of the repository (default to current directory if not specified)
 REPO_DIR="${1:-.}"

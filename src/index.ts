@@ -2,8 +2,10 @@ import * as core from '@actions/core';
 import { getOctokit, context } from '@actions/github';
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 
-import { generateUnitTests, runUnitTests, generateTestReport } from './ut';
+// current we support typescript and python, while the python library is not available yet, we will use typescript as the default language
+import { generateUnitTests, runUnitTests, generateTestReport } from './ut_ts';
 import { execSync } from 'child_process';
+import * as fs from 'fs';
 
 interface PullRequest {
   number: number;
@@ -135,8 +137,14 @@ async function generatePRDescription(files: PullFile[], octokit: ReturnType<type
 async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string): Promise<void> {
   const pullRequest = context.payload.pull_request as PullRequest;
   // Generate and run unit tests
-  const sourceCode = execSync('./code_layout.sh').toString();
-  const testCases = await generateUnitTests(client, modelId, sourceCode);
+  // Execute the code_layout.sh script
+  const outputFile = 'combined_code_dump.txt';
+  execSync(`chmod +x ./code_layout.sh && ./code_layout.sh . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
+
+  // Read the combined code
+  const combinedCode = fs.readFileSync(outputFile, 'utf8');
+  // TODO, split the content into chunks of maxChunkSize  
+  const testCases = await generateUnitTests(client, modelId, combinedCode);
   await runUnitTests(testCases);
   await generateTestReport(testCases);
 

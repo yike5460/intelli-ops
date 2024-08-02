@@ -34,8 +34,10 @@ exports.invokeModel = invokeModel;
 const core = __importStar(__nccwpck_require__(2186));
 const github_1 = __nccwpck_require__(5438);
 const client_bedrock_runtime_1 = __nccwpck_require__(9687);
-const ut_1 = __nccwpck_require__(8560);
+// current we support typescript and python, while the python library is not available yet, we will use typescript as the default language
+const ut_ts_1 = __nccwpck_require__(8200);
 const child_process_1 = __nccwpck_require__(2081);
+const fs = __importStar(__nccwpck_require__(7147));
 // This function splits the content into chunks of maxChunkSize
 function splitContentIntoChunks(content, maxChunkSize) {
     const chunks = [];
@@ -136,10 +138,15 @@ async function generatePRDescription(files, octokit, repo, pullNumber) {
 async function generateUnitTestsSuite(client, modelId) {
     const pullRequest = github_1.context.payload.pull_request;
     // Generate and run unit tests
-    const sourceCode = (0, child_process_1.execSync)('./code_layout.sh').toString();
-    const testCases = await (0, ut_1.generateUnitTests)(client, modelId, sourceCode);
-    await (0, ut_1.runUnitTests)(testCases);
-    await (0, ut_1.generateTestReport)(testCases);
+    // Execute the code_layout.sh script
+    const outputFile = 'combined_code_dump.txt';
+    (0, child_process_1.execSync)(`chmod +x ./code_layout.sh && ./code_layout.sh . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
+    // Read the combined code
+    const combinedCode = fs.readFileSync(outputFile, 'utf8');
+    // TODO, split the content into chunks of maxChunkSize  
+    const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, combinedCode);
+    await (0, ut_ts_1.runUnitTests)(testCases);
+    await (0, ut_ts_1.generateTestReport)(testCases);
     // Push changes to PR
     if (github_1.context.payload.pull_request) {
         (0, child_process_1.execSync)('git push origin HEAD:' + pullRequest.head.sha);
@@ -51380,10 +51387,10 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
-/***/ 8560:
+/***/ 8200:
 /***/ ((module) => {
 
-module.exports = eval("require")("./ut");
+module.exports = eval("require")("./ut_ts");
 
 
 /***/ }),
