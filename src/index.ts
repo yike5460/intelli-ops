@@ -2,6 +2,9 @@ import * as core from '@actions/core';
 import { getOctokit, context } from '@actions/github';
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 
+import { generateUnitTests, runUnitTests, generateTestReport } from './ut';
+import { execSync } from 'child_process';
+
 interface PullRequest {
   number: number;
   head: {
@@ -127,6 +130,22 @@ async function generatePRDescription(files: PullFile[], octokit: ReturnType<type
   const description = pr_generation_prompt.replace('[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]', fileChanges.join('\n'));
 
   return description;
+}
+
+async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string): Promise<void> {
+  const pullRequest = context.payload.pull_request as PullRequest;
+  // Generate and run unit tests
+  const sourceCode = execSync('./code_layout.sh').toString();
+  const testCases = await generateUnitTests(client, modelId, sourceCode);
+  await runUnitTests(testCases);
+  await generateTestReport(testCases);
+
+  // Push changes to PR
+  if (context.payload.pull_request) {
+    execSync('git push origin HEAD:' + pullRequest.head.sha);
+  }
+
+  console.log('Unit tests and report generated and pushed to PR');
 }
 
 // Refer to https://google.github.io/eng-practices/review/reviewer/looking-for.html and https://google.github.io/eng-practices/review/reviewer/standard.html
@@ -329,6 +348,8 @@ async function run(): Promise<void> {
     const excludeFiles = core.getInput('exclude-files');
     const reviewLevel = core.getInput('review-level');
     const generatePRDesc = core.getInput('generate-pr-description');
+    const generateUnitTestSuite = core.getInput('generate-unit-test-suite');
+
     const excludePatterns = excludeFiles ? excludeFiles.split(',').map(p => p.trim()) : [];
 
     console.log(`GitHub Token: ${githubToken ? 'Token is set' : 'Token is not set'}`);
@@ -360,6 +381,7 @@ async function run(): Promise<void> {
       pull_number: pullRequest.number,
     });
 
+    // branch to generate PR description
     if (generatePRDesc) {
       const prDescriptionTemplate = await generatePRDescription(files as PullFile[], octokit, repo, pullRequest.number);
       // invoke model to generate complete PR description
@@ -375,6 +397,11 @@ async function run(): Promise<void> {
         body: prDescriptionWithTemplate,
       });
       console.log('PR description updated successfully.');
+    }
+
+    // branch to generate unit tests suite
+    if (generateUnitTestSuite) {
+      await generateUnitTestsSuite(bedrockClient, modelId);
     }
 
     let reviewComments: ReviewComment[] = [];
