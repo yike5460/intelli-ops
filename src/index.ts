@@ -146,10 +146,14 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
 
   // Read the combined code
   const combinedCode = fs.readFileSync(outputFile, 'utf8');
-  // TODO, split the content into chunks of maxChunkSize  
-  const testCases = await generateUnitTests(client, modelId, combinedCode);
-  await runUnitTests(testCases);
-  await generateTestReport(testCases);
+  // TODO, split the content into chunks of maxChunkSize, truncate the content if it exceeds the maxChunkSize
+  const maxChunkSize = 2048;
+  const chunks = splitContentIntoChunks(combinedCode, maxChunkSize);
+  if (chunks[0] !== undefined) {
+    const testCases = await generateUnitTests(client, modelId, chunks[0]);
+    await runUnitTests(testCases);
+    await generateTestReport(testCases);
+  }
 
   // Push changes to PR
   if (context.payload.pull_request) {
