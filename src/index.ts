@@ -6,6 +6,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 // using abosolute path to import the functions from ut_ts.ts
 import { generateUnitTests, runUnitTests, generateTestReport } from '@/src/ut_ts';
 import { execSync } from 'child_process';
+import * as path from 'path';
 import * as fs from 'fs';
 
 interface PullRequest {
@@ -140,7 +141,8 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
   // Generate and run unit tests
   // Execute the code_layout.sh script
   const outputFile = 'combined_code_dump.txt';
-  execSync(`chmod +x ./code_layout.sh && ./code_layout.sh . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
+  const scriptPath = path.join(__dirname, 'code_layout.sh');
+  execSync(`chmod +x "${scriptPath}" && "${scriptPath}" . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
 
   // Read the combined code
   const combinedCode = fs.readFileSync(outputFile, 'utf8');

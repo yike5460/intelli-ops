@@ -38,6 +38,7 @@ const client_bedrock_runtime_1 = __nccwpck_require__(9687);
 // using abosolute path to import the functions from ut_ts.ts
 const ut_ts_1 = __nccwpck_require__(3159);
 const child_process_1 = __nccwpck_require__(2081);
+const path = __importStar(__nccwpck_require__(1017));
 const fs = __importStar(__nccwpck_require__(7147));
 // This function splits the content into chunks of maxChunkSize
 function splitContentIntoChunks(content, maxChunkSize) {
@@ -141,7 +142,8 @@ async function generateUnitTestsSuite(client, modelId) {
     // Generate and run unit tests
     // Execute the code_layout.sh script
     const outputFile = 'combined_code_dump.txt';
-    (0, child_process_1.execSync)(`chmod +x ./code_layout.sh && ./code_layout.sh . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
+    const scriptPath = path.join(__dirname, 'code_layout.sh');
+    (0, child_process_1.execSync)(`chmod +x "${scriptPath}" && "${scriptPath}" . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
     // Read the combined code
     const combinedCode = fs.readFileSync(outputFile, 'utf8');
     // TODO, split the content into chunks of maxChunkSize  
