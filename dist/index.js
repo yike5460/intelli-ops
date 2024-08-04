@@ -35,7 +35,8 @@ const core = __importStar(__nccwpck_require__(2186));
 const github_1 = __nccwpck_require__(5438);
 const client_bedrock_runtime_1 = __nccwpck_require__(9687);
 // current we support typescript and python, while the python library is not available yet, we will use typescript as the default language
-const ut_ts_1 = __nccwpck_require__(8200);
+// using abosolute path to import the functions from ut_ts.ts
+const ut_ts_1 = __nccwpck_require__(3159);
 const child_process_1 = __nccwpck_require__(2081);
 const fs = __importStar(__nccwpck_require__(7147));
 // This function splits the content into chunks of maxChunkSize
@@ -51387,10 +51388,106 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
-/***/ 8200:
-/***/ ((module) => {
+/***/ 3159:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
-module.exports = eval("require")("./ut_ts");
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.generateUnitTests = generateUnitTests;
+exports.runUnitTests = runUnitTests;
+exports.generateTestReport = generateTestReport;
+const fs = __importStar(__nccwpck_require__(7147));
+const path = __importStar(__nccwpck_require__(1017));
+const client_bedrock_runtime_1 = __nccwpck_require__(9687);
+const child_process_1 = __nccwpck_require__(2081);
+async function generateUnitTests(client, modelId, sourceCode) {
+    const prompt = `
+    Analyze the following TypeScript code and generate unit tests:
+
+    ${sourceCode}
+
+    Categorize the methods into:
+    1. Methods that can be tested directly
+    2. Methods that can be tested indirectly
+    3. Methods that are not unit-testable
+
+    For each testable method, create a unit test. Use Jest as the testing framework.
+    Return the results as a JSON array of test cases, where each test case has the following structure:
+    {
+        "name": "Test name",
+        "type": "direct" | "indirect" | "not-testable",
+        "code": "The actual test code"
+    }
+    `;
+    const command = new client_bedrock_runtime_1.InvokeModelCommand({
+        modelId: modelId,
+        contentType: "application/json",
+        body: JSON.stringify({
+            prompt: prompt,
+            max_tokens: 4096,
+            temperature: 0.7,
+        }),
+    });
+    const response = await client.send(command);
+    const result = JSON.parse(new TextDecoder().decode(response.body));
+    return JSON.parse(result.completion);
+}
+async function runUnitTests(testCases) {
+    const testDir = path.join(__dirname, '..', 'test');
+    if (!fs.existsSync(testDir)) {
+        fs.mkdirSync(testDir, { recursive: true });
+    }
+    const testFilePath = path.join(testDir, 'generated.test.ts');
+    const testFileContent = testCases
+        .filter(tc => tc.type !== 'not-testable')
+        .map(tc => tc.code)
+        .join('\n\n');
+    fs.writeFileSync(testFilePath, testFileContent);
+    try {
+        (0, child_process_1.execSync)('npx jest', { stdio: 'inherit' });
+    }
+    catch (error) {
+        console.error('Error running tests:', error);
+    }
+}
+async function generateTestReport(testCases) {
+    const report = {
+        totalTests: testCases.length,
+        directTests: testCases.filter(tc => tc.type === 'direct').length,
+        indirectTests: testCases.filter(tc => tc.type === 'indirect').length,
+        notTestable: testCases.filter(tc => tc.type === 'not-testable').length,
+    };
+    const reportDir = path.join(__dirname, '..', 'reports');
+    if (!fs.existsSync(reportDir)) {
+        fs.mkdirSync(reportDir, { recursive: true });
+    }
+    const reportPath = path.join(reportDir, 'report.json');
+    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+}
 
 
 /***/ }),

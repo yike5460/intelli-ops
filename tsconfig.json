@@ -2,6 +2,10 @@
     "compilerOptions": {
       "allowUnreachableCode": false,
       "allowUnusedLabels": false,
+      "baseUrl": ".",
+      "paths": {
+        "@/*": ["./*"]
+      },
       "strict": true,
       "exactOptionalPropertyTypes": false,
       "noFallthroughCasesInSwitch": true,

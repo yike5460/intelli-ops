@@ -3,7 +3,8 @@ import { getOctokit, context } from '@actions/github';
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 
 // current we support typescript and python, while the python library is not available yet, we will use typescript as the default language
-import { generateUnitTests, runUnitTests, generateTestReport } from './ut_ts';
+// using abosolute path to import the functions from ut_ts.ts
+import { generateUnitTests, runUnitTests, generateTestReport } from '@/src/ut_ts';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 
