@@ -156,9 +156,10 @@ async function generateUnitTestsSuite(client, modelId) {
         await (0, ut_ts_1.runUnitTests)(testCases);
         await (0, ut_ts_1.generateTestReport)(testCases);
     }
-    // Push changes to PR
+    console.log('Unit tests and report generated successfully.');
+    // Add the generated unit tests to existing PR
     if (github_1.context.payload.pull_request) {
-        (0, child_process_1.execSync)('git push origin HEAD:' + pullRequest.head.sha);
+        (0, child_process_1.execSync)(`git add . && git commit -m "Add unit tests" && git push origin HEAD:${pullRequest.head.sha}`, { stdio: 'inherit' });
     }
     console.log('Unit tests and report generated and pushed to PR');
 }

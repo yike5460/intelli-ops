@@ -15,7 +15,9 @@ jobs:
     permissions:
       # read repository contents and write pull request comments
       id-token: write
-      contents: read
+      # allow github action bot to push new content into existing pull requests
+      contents: write
+      # contents: read
       pull-requests: write
     steps:
     - name: Checkout code
@@ -53,7 +55,7 @@ jobs:
         aws-region: us-east-1
 
     - name: Code review using AWS Bedrock
-      uses: yike5460/intelli-ops@v0.0.19
+      uses: yike5460/intelli-ops@v0.0.20
       with:
         # Automatic Provision: The GITHUB_TOKEN is automatically created and provided by GitHub for each workflow run. You don't need to manually create or store this token as a secret.
         github-token: ${{ secrets.GITHUB_TOKEN }}

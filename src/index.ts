@@ -156,12 +156,11 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
     await runUnitTests(testCases);
     await generateTestReport(testCases);
   }
-
-  // Push changes to PR
+  console.log('Unit tests and report generated successfully.');
+  // Add the generated unit tests to existing PR
   if (context.payload.pull_request) {
-    execSync('git push origin HEAD:' + pullRequest.head.sha);
+    execSync(`git add . && git commit -m "Add unit tests" && git push origin HEAD:${pullRequest.head.sha}`, { stdio: 'inherit' });
   }
-
   console.log('Unit tests and report generated and pushed to PR');
 }
 
