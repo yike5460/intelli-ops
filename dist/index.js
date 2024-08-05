@@ -159,6 +159,9 @@ async function generateUnitTestsSuite(client, modelId) {
     console.log('Unit tests and report generated successfully.');
     // Add the generated unit tests to existing PR
     if (github_1.context.payload.pull_request) {
+        // include git config to push the changes to the PR
+        (0, child_process_1.execSync)('git config --global user.email "github-actions[bot]@users.noreply.github.com"');
+        (0, child_process_1.execSync)('git config --global user.name "github-actions[bot]"');
         (0, child_process_1.execSync)(`git add . && git commit -m "Add unit tests" && git push origin HEAD:${pullRequest.head.sha}`, { stdio: 'inherit' });
     }
     console.log('Unit tests and report generated and pushed to PR');
