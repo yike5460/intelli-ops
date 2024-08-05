@@ -29,6 +29,7 @@ export async function generateUnitTests(client: BedrockRuntimeClient, modelId: s
     }
     `;
 
+    console.log('Generating unit tests with prompt length:', prompt.length + sourceCode.length);
     const command = new InvokeModelCommand({
         modelId: modelId,
         contentType: "application/json",
@@ -41,6 +42,7 @@ export async function generateUnitTests(client: BedrockRuntimeClient, modelId: s
 
     const response = await client.send(command);
     const result = JSON.parse(new TextDecoder().decode(response.body));
+    console.log('Unit test generation result:', result);
     return JSON.parse(result.completion);
 }
 

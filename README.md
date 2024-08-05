@@ -146,6 +146,73 @@ To configure GitHub Actions to assume the role you just created, you will need t
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+
+## Authenticating AWS Credentials in GitHub Actions
+The [document](https://github.com/aws-actions/configure-aws-credentials) outlines five different methods for retrieving AWS credentials, each with its own use case. Here's a brief overview of each method:
+
+1. GitHub's OIDC provider (Recommended):
+
+```yaml
+- name: Configure AWS Credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: arn:aws:iam::123456789100:role/my-github-actions-role
+    aws-region: us-east-1
+```
+
+2. IAM User:
+
+```yaml
+- name: Configure AWS Credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    aws-region: us-east-1
+```
+
+3. Assume Role using IAM User credentials:
+
+```yaml
+- name: Configure AWS Credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    aws-region: us-east-1
+    role-to-assume: arn:aws:iam::123456789100:role/my-github-actions-role
+```
+
+4. Assume Role using WebIdentity Token File credentials:
+
+```yaml
+- name: Configure AWS Credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: arn:aws:iam::123456789100:role/my-github-actions-role
+    aws-region: us-east-1
+    web-identity-token-file: /path/to/token/file
+```
+
+5. Assume Role using existing credentials:
+
+```yaml
+- name: Configure AWS Credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: arn:aws:iam::123456789100:role/my-github-actions-role
+    aws-region: us-east-1
+    role-chaining: true
+```
+
+Key differences:
+
+1. GitHub's OIDC provider is the recommended method as it uses short-lived credentials and doesn't require storing long-term secrets.
+2. IAM User method uses long-term credentials, which is less secure but simpler to set up.
+3. Assuming a role with IAM User credentials adds an extra layer of security by using temporary credentials.
+4. WebIdentity Token File method is useful for scenarios like Amazon EKS IRSA.
+5. Using existing credentials with role chaining is helpful when you already have AWS credentials in your environment and want to assume a different role.
+
 ## License Summary
 This project is licensed under Apache 2.0 License. See the LICENSE file for details.
 

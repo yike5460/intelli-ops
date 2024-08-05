@@ -147,9 +147,11 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
   // Read the combined code
   const combinedCode = fs.readFileSync(outputFile, 'utf8');
   // TODO, split the content into chunks of maxChunkSize, truncate the content if it exceeds the maxChunkSize
-  const maxChunkSize = 2048;
+  const maxChunkSize = 1024;
   const chunks = splitContentIntoChunks(combinedCode, maxChunkSize);
   if (chunks[0] !== undefined) {
+    // log the processing phase
+    console.log(`Processing chunk 1 of ${chunks.length}`);
     const testCases = await generateUnitTests(client, modelId, chunks[0]);
     await runUnitTests(testCases);
     await generateTestReport(testCases);

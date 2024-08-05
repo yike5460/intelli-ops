@@ -146,10 +146,16 @@ async function generateUnitTestsSuite(client, modelId) {
     (0, child_process_1.execSync)(`chmod +x "${scriptPath}" && "${scriptPath}" . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
     // Read the combined code
     const combinedCode = fs.readFileSync(outputFile, 'utf8');
-    // TODO, split the content into chunks of maxChunkSize  
-    const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, combinedCode);
-    await (0, ut_ts_1.runUnitTests)(testCases);
-    await (0, ut_ts_1.generateTestReport)(testCases);
+    // TODO, split the content into chunks of maxChunkSize, truncate the content if it exceeds the maxChunkSize
+    const maxChunkSize = 1024;
+    const chunks = splitContentIntoChunks(combinedCode, maxChunkSize);
+    if (chunks[0] !== undefined) {
+        // log the processing phase
+        console.log(`Processing chunk 1 of ${chunks.length}`);
+        const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, chunks[0]);
+        await (0, ut_ts_1.runUnitTests)(testCases);
+        await (0, ut_ts_1.generateTestReport)(testCases);
+    }
     // Push changes to PR
     if (github_1.context.payload.pull_request) {
         (0, child_process_1.execSync)('git push origin HEAD:' + pullRequest.head.sha);
@@ -51445,6 +51451,7 @@ async function generateUnitTests(client, modelId, sourceCode) {
         "code": "The actual test code"
     }
     `;
+    console.log('Generating unit tests with prompt length:', prompt.length + sourceCode.length);
     const command = new client_bedrock_runtime_1.InvokeModelCommand({
         modelId: modelId,
         contentType: "application/json",
@@ -51456,6 +51463,7 @@ async function generateUnitTests(client, modelId, sourceCode) {
     });
     const response = await client.send(command);
     const result = JSON.parse(new TextDecoder().decode(response.body));
+    console.log('Unit test generation result:', result);
     return JSON.parse(result.completion);
 }
 async function runUnitTests(testCases) {
