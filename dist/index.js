@@ -159,19 +159,28 @@ async function generateUnitTestsSuite(client, modelId) {
     console.log('Unit tests and report generated successfully.');
     // Add the generated unit tests to existing PR
     if (github_1.context.payload.pull_request) {
-        // include git config to push the changes to the PR
-        (0, child_process_1.execSync)('git config --global user.email "github-actions[bot]@users.noreply.github.com"');
-        (0, child_process_1.execSync)('git config --global user.name "github-actions[bot]"');
-        const branchName = github_1.context.payload.pull_request?.['head'].ref;
-        if (!branchName) {
-            throw new Error('Unable to determine the branch name');
+        try {
+            // include git config to push the changes to the PR
+            (0, child_process_1.execSync)('git config --global user.email "github-actions[bot]@users.noreply.github.com"');
+            (0, child_process_1.execSync)('git config --global user.name "github-actions[bot]"');
+            const branchName = github_1.context.payload.pull_request?.['head'].ref;
+            if (!branchName) {
+                throw new Error('Unable to determine the branch name');
+            }
+            console.log(`Pushing the changes to the PR branch: ${branchName}`);
+            // fetch the latest changes
+            (0, child_process_1.execSync)('git fetch origin');
+            // checkout to the PR branch
+            (0, child_process_1.execSync)(`git checkout ${branchName}`);
+            // add the generated unit tests to the PR, commit and push the changes
+            (0, child_process_1.execSync)(`git add . && git commit -m "Add unit tests" && git push origin HEAD:refs/heads/${branchName}`, { stdio: 'inherit' });
+            console.log('Unit tests and report generated and pushed to PR');
         }
-        console.log(`Pushing the changes to the PR branch: ${branchName}`);
-        (0, child_process_1.execSync)('git fetch origin');
-        (0, child_process_1.execSync)('git merge origin/main');
-        (0, child_process_1.execSync)(`git add . && git commit -m "Add unit tests" && git push origin HEAD:refs/heads/${branchName}`, { stdio: 'inherit' });
+        catch (error) {
+            console.error('Error occurred while pushing the changes to the PR branch', error);
+            throw error;
+        }
     }
-    console.log('Unit tests and report generated and pushed to PR');
 }
 // Refer to https://google.github.io/eng-practices/review/reviewer/looking-for.html and https://google.github.io/eng-practices/review/reviewer/standard.html
 const detailed_review_prompt = `<task_context>
