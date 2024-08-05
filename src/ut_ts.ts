@@ -30,20 +30,34 @@ export async function generateUnitTests(client: BedrockRuntimeClient, modelId: s
     `;
 
     console.log('Generating unit tests with prompt length:', prompt.length + sourceCode.length);
+
+    // exact the same implementation as function invokeModel in index.ts
+    const payload = {
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: [{
+              type: "text",
+              text: prompt,
+            }],
+          },
+        ],
+      };
+
     const command = new InvokeModelCommand({
+        // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
         modelId: modelId,
         contentType: "application/json",
-        body: JSON.stringify({
-            prompt: prompt,
-            max_tokens: 4096,
-            temperature: 0.7,
-        }),
+        body: JSON.stringify(payload),
     });
 
-    const response = await client.send(command);
-    const result = JSON.parse(new TextDecoder().decode(response.body));
-    console.log('Unit test generation result:', result);
-    return JSON.parse(result.completion);
+    const apiResponse = await client.send(command);
+    const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
+    const responseBody = JSON.parse(decodedResponseBody);
+    const finalResult = responseBody.content[0].text;
+    return finalResult;
 }
 
 export async function runUnitTests(testCases: TestCase[]): Promise<void> {
