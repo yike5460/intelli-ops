@@ -162,8 +162,12 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
     // include git config to push the changes to the PR
     execSync('git config --global user.email "github-actions[bot]@users.noreply.github.com"');
     execSync('git config --global user.name "github-actions[bot]"');
+    const branchName = context.payload.pull_request?.['head'].ref;
+    if (!branchName) {
+      throw new Error('Unable to determine the branch name');
+    }
 
-    execSync(`git add . && git commit -m "Add unit tests" && git push origin HEAD:${pullRequest.head.sha}`, { stdio: 'inherit' });
+    execSync(`git add . && git commit -m "Add unit tests" && git push origin HEAD:refs/heads/${branchName}`, { stdio: 'inherit' });
   }
   console.log('Unit tests and report generated and pushed to PR');
 }

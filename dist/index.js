@@ -162,7 +162,11 @@ async function generateUnitTestsSuite(client, modelId) {
         // include git config to push the changes to the PR
         (0, child_process_1.execSync)('git config --global user.email "github-actions[bot]@users.noreply.github.com"');
         (0, child_process_1.execSync)('git config --global user.name "github-actions[bot]"');
-        (0, child_process_1.execSync)(`git add . && git commit -m "Add unit tests" && git push origin HEAD:${pullRequest.head.sha}`, { stdio: 'inherit' });
+        const branchName = github_1.context.payload.pull_request?.['head'].ref;
+        if (!branchName) {
+            throw new Error('Unable to determine the branch name');
+        }
+        (0, child_process_1.execSync)(`git add . && git commit -m "Add unit tests" && git push origin HEAD:refs/heads/${branchName}`, { stdio: 'inherit' });
     }
     console.log('Unit tests and report generated and pushed to PR');
 }
