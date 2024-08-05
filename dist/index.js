@@ -166,6 +166,9 @@ async function generateUnitTestsSuite(client, modelId) {
         if (!branchName) {
             throw new Error('Unable to determine the branch name');
         }
+        console.log(`Pushing the changes to the PR branch: ${branchName}`);
+        (0, child_process_1.execSync)('git fetch origin');
+        (0, child_process_1.execSync)('git merge origin/main');
         (0, child_process_1.execSync)(`git add . && git commit -m "Add unit tests" && git push origin HEAD:refs/heads/${branchName}`, { stdio: 'inherit' });
     }
     console.log('Unit tests and report generated and pushed to PR');

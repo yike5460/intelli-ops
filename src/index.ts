@@ -166,7 +166,9 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
     if (!branchName) {
       throw new Error('Unable to determine the branch name');
     }
-
+    console.log(`Pushing the changes to the PR branch: ${branchName}`);
+    execSync('git fetch origin');
+    execSync('git merge origin/main');
     execSync(`git add . && git commit -m "Add unit tests" && git push origin HEAD:refs/heads/${branchName}`, { stdio: 'inherit' });
   }
   console.log('Unit tests and report generated and pushed to PR');
