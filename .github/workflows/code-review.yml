@@ -63,7 +63,7 @@ jobs:
         model-id: anthropic.claude-3-sonnet-20240229-v1:0
         exclude-files: '*.md,*.json'
         review-level: 'concise'
-        code-review: 'false'
+        code-review: 'true'
         generate-pr-description: 'true'
         generate-unit-test-suite: 'true'
       env:
