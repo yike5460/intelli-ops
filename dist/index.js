@@ -124,8 +124,14 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 - [ ] New and existing unit tests pass locally with my changes
 - [ ] Any dependent changes have been merged and published in downstream modules
 `;
-async function generatePRDescription(files, octokit, repo, pullNumber) {
+async function generatePRDescription(client, modelId, octokit) {
     const pullRequest = github_1.context.payload.pull_request;
+    const repo = github_1.context.repo;
+    // fetch the list of files changed in the PR each time since the file can be changed in operation like unit test generation, code review, etc.
+    const { data: files } = await octokit.rest.pulls.listFiles({
+        ...repo,
+        pull_number: pullRequest.number,
+    });
     const fileChanges = await Promise.all(files.map(async (file) => {
         const { data: content } = await octokit.rest.repos.getContent({
             ...repo,
@@ -134,8 +140,18 @@ async function generatePRDescription(files, octokit, repo, pullNumber) {
         });
         return `${file.filename}: ${file.status}`;
     }));
-    const description = pr_generation_prompt.replace('[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]', fileChanges.join('\n'));
-    return description;
+    const prDescriptionTemplate = pr_generation_prompt.replace('[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]', fileChanges.join('\n'));
+    // invoke model to generate complete PR description
+    const payloadInput = prDescriptionTemplate;
+    const prDescription = await invokeModel(client, modelId, payloadInput);
+    // append fixed template content to the generated PR description
+    const prDescriptionWithTemplate = prDescription + fixed_pr_generation_template;
+    await octokit.rest.pulls.update({
+        ...repo,
+        pull_number: pullRequest.number,
+        body: prDescriptionWithTemplate,
+    });
+    console.log('PR description updated successfully.');
 }
 async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     const pullRequest = github_1.context.payload.pull_request;
@@ -374,6 +390,64 @@ async function invokeModel(client, modelId, payloadInput) {
     const finalResult = responseBody.content[0].text;
     return finalResult;
 }
+async function generateCodeReviewComment(bedrockClient, modelId, octokit, excludePatterns, reviewLevel) {
+    const pullRequest = github_1.context.payload.pull_request;
+    const repo = github_1.context.repo;
+    // fetch the list of files changed in the PR each time since the file can be changed in operation like unit test generation, code review, etc.
+    const { data: files } = await octokit.rest.pulls.listFiles({
+        ...repo,
+        pull_number: pullRequest.number,
+    });
+    let reviewComments = [];
+    for (const file of files) {
+        if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
+            console.log(`Reviewing file: ${file.filename}`);
+            const changedLines = file.patch
+                .split('\n')
+                .filter(line => line.startsWith('+') && !line.startsWith('+++'))
+                .map(line => line.substring(1));
+            if (changedLines.length === 0)
+                continue;
+            const fileContent = changedLines.join('\n');
+            const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
+            let formattedContent = promptTemplate.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
+            // invoke model to generate review comments
+            const payloadInput = formattedContent;
+            var review = await invokeModel(bedrockClient, modelId, payloadInput);
+            // log the generated review comments and check if it is empty
+            console.log(`Review comments ${review} generated for file: ${file.filename}`);
+            if (!review || review.trim() == '') {
+                console.log("No review comments generated for file: {}", file.filename);
+                // add default review comment
+                review = "No review needed, LGTM!";
+                continue;
+            }
+            const position = file.patch.split('\n').findIndex(line => line.startsWith('+') && !line.startsWith('+++')) + 1;
+            if (position > 0) {
+                reviewComments.push({
+                    path: file.filename,
+                    body: review,
+                    position: position,
+                });
+            }
+        }
+        else {
+            console.log(`Skipping file: ${file.filename}`);
+        }
+    }
+    if (reviewComments.length > 0) {
+        await octokit.rest.pulls.createReview({
+            ...repo,
+            pull_number: pullRequest.number,
+            event: 'COMMENT',
+            comments: reviewComments,
+        });
+        console.log('Code review comments posted successfully.');
+    }
+    else {
+        console.log('No review comments to post.');
+    }
+}
 async function run() {
     try {
         const githubToken = core.getInput('github-token');
@@ -381,6 +455,7 @@ async function run() {
         const modelId = core.getInput('model-id');
         const excludeFiles = core.getInput('exclude-files');
         const reviewLevel = core.getInput('review-level');
+        const codeReview = core.getInput('code-review');
         const generatePRDesc = core.getInput('generate-pr-description');
         const generateUnitTestSuite = core.getInput('generate-unit-test-suite');
         const excludePatterns = excludeFiles ? excludeFiles.split(',').map(p => p.trim()) : [];
@@ -388,8 +463,10 @@ async function run() {
         console.log(`AWS Region: ${awsRegion}`);
         console.log(`Model ID: ${modelId}`);
         console.log(`Excluded files: ${excludeFiles}`);
+        console.log('Code review: ${codeReview}');
         console.log(`Review level: ${reviewLevel}`);
         console.log(`Generate PR description: ${generatePRDesc ? 'Yes' : 'No'}`);
+        console.log(`Generate unit test suite: ${generateUnitTestSuite ? 'Yes' : 'No'}`);
         if (!githubToken) {
             throw new Error('GitHub token is not set');
         }
@@ -408,71 +485,15 @@ async function run() {
         });
         // branch to generate PR description
         if (generatePRDesc) {
-            const prDescriptionTemplate = await generatePRDescription(files, octokit, repo, pullRequest.number);
-            // invoke model to generate complete PR description
-            const payloadInput = prDescriptionTemplate;
-            const prDescription = await invokeModel(bedrockClient, modelId, payloadInput);
-            // append fixed template content to the generated PR description
-            const prDescriptionWithTemplate = prDescription + fixed_pr_generation_template;
-            await octokit.rest.pulls.update({
-                ...repo,
-                pull_number: pullRequest.number,
-                body: prDescriptionWithTemplate,
-            });
-            console.log('PR description updated successfully.');
+            await generatePRDescription(bedrockClient, modelId, octokit);
         }
         // branch to generate unit tests suite
         if (generateUnitTestSuite) {
             await generateUnitTestsSuite(bedrockClient, modelId, octokit, repo);
         }
-        let reviewComments = [];
-        for (const file of files) {
-            if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
-                console.log(`Reviewing file: ${file.filename}`);
-                const changedLines = file.patch
-                    .split('\n')
-                    .filter(line => line.startsWith('+') && !line.startsWith('+++'))
-                    .map(line => line.substring(1));
-                if (changedLines.length === 0)
-                    continue;
-                const fileContent = changedLines.join('\n');
-                const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
-                let formattedContent = promptTemplate.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
-                // invoke model to generate review comments
-                const payloadInput = formattedContent;
-                var review = await invokeModel(bedrockClient, modelId, payloadInput);
-                // log the generated review comments and check if it is empty
-                console.log(`Review comments ${review} generated for file: ${file.filename}`);
-                if (!review || review.trim() == '') {
-                    console.log("No review comments generated for file: {}", file.filename);
-                    // add default review comment
-                    review = "No review needed, LGTM!";
-                    continue;
-                }
-                const position = file.patch.split('\n').findIndex(line => line.startsWith('+') && !line.startsWith('+++')) + 1;
-                if (position > 0) {
-                    reviewComments.push({
-                        path: file.filename,
-                        body: review,
-                        position: position,
-                    });
-                }
-            }
-            else {
-                console.log(`Skipping file: ${file.filename}`);
-            }
-        }
-        if (reviewComments.length > 0) {
-            await octokit.rest.pulls.createReview({
-                ...repo,
-                pull_number: pullRequest.number,
-                event: 'COMMENT',
-                comments: reviewComments,
-            });
-            console.log('Code review comments posted successfully.');
-        }
-        else {
-            console.log('No review comments to post.');
+        // branch to generate code review comments
+        if (codeReview === 'true') {
+            await generateCodeReviewComment(bedrockClient, modelId, octokit, excludePatterns, reviewLevel);
         }
     }
     catch (error) {

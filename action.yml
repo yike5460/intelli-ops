@@ -20,6 +20,9 @@ inputs:
     description: 'Review level'
     required: false
     default: 'concise'
+  code-review:
+    description: 'Code review'
+    required: false
   generate-pr-description:
     description: 'Generate PR description'
     required: false
