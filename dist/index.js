@@ -193,15 +193,32 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
             //   body: updatedDescription,
             // });
             // console.log('PR description updated with unit tests summary.');
-            // Create a new file with the generated unit tests
+            // Create a new file with the generated unit tests in test folder
             const unitTestsContent = testCases.map(tc => tc.code).join('\n\n');
-            const unitTestsFileName = 'generated_unit_tests.py'; // or .ts, depending on your project
+            const unitTestsFileName = 'test/unit_tests.ts';
+            // Check if the file already exists
+            let fileSha;
+            try {
+                const { data: existingFile } = await octokit.rest.repos.getContent({
+                    ...repo,
+                    path: unitTestsFileName,
+                    ref: branchName,
+                });
+                if ('sha' in existingFile) {
+                    fileSha = existingFile.sha;
+                }
+            }
+            catch (error) {
+                // it's fine if the file does not exist
+                console.log(`File ${unitTestsFileName} does not exist in the repository`);
+            }
             await octokit.rest.repos.createOrUpdateFileContents({
                 ...repo,
                 path: unitTestsFileName,
                 message: 'Add generated unit tests',
                 content: Buffer.from(unitTestsContent).toString('base64'),
                 branch: branchName,
+                sha: fileSha, // Include the sha if the file exists, undefined otherwise
             });
             console.log(`Unit tests added to PR as ${unitTestsFileName}`);
         }
@@ -262,7 +279,8 @@ Provide feedback on these aspects, categorizing your comments as follows:
 </rules>
 
 <output_format>
-Provide your review in the following format. Limit your response to 200 words. Note if changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't include any further details in categories below.
+If changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't output any further details in categories below.
+Otherwise provide your review in the following format. Limit your response to 200 words.
 
 Summary:
 [Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below]
@@ -323,7 +341,8 @@ Provide feedback on these aspects, categorizing your comments as follows:
 </rules>
 
 <output_format>
-Provide your review in the following format. Limit your response to 200 words. Note if changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't include any further details in categories below.
+If changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't output any further details in categories below.
+Otherwise provide your review in the following format. Limit your response to 200 words.
 
 Summary:
 [Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below, Note if changed code is too simple or not fitting in categories below, please answer "No Review Needed, LGTM!" directly. Limit your response to 200 words.]
