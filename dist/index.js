@@ -137,7 +137,7 @@ async function generatePRDescription(files, octokit, repo, pullNumber) {
     const description = pr_generation_prompt.replace('[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]', fileChanges.join('\n'));
     return description;
 }
-async function generateUnitTestsSuite(client, modelId) {
+async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     const pullRequest = github_1.context.payload.pull_request;
     // Generate and run unit tests
     // Execute the code_layout.sh script
@@ -158,23 +158,36 @@ async function generateUnitTestsSuite(client, modelId) {
     }
     console.log('Unit tests and report generated successfully.');
     // Add the generated unit tests to existing PR
-    if (github_1.context.payload.pull_request) {
+    if (pullRequest) {
         try {
-            // include git config to push the changes to the PR
-            (0, child_process_1.execSync)('git config --global user.email "github-actions[bot]@users.noreply.github.com"');
-            (0, child_process_1.execSync)('git config --global user.name "github-actions[bot]"');
-            const branchName = github_1.context.payload.pull_request?.['head'].ref;
+            const branchName = pullRequest.head.ref;
+            const testCases = []; // Declare the testCases variable
             if (!branchName) {
                 throw new Error('Unable to determine the branch name');
             }
-            console.log(`Pushing the changes to the PR branch: ${branchName}`);
-            // fetch the latest changes
-            (0, child_process_1.execSync)('git fetch origin');
-            // checkout to the PR branch
-            (0, child_process_1.execSync)(`git checkout ${branchName}`);
-            // add the generated unit tests to the PR, commit and push the changes
-            (0, child_process_1.execSync)(`git add . && git commit -m "Add unit tests" && git push origin HEAD:refs/heads/${branchName}`, { stdio: 'inherit' });
-            console.log('Unit tests and report generated and pushed to PR');
+            console.log(`Adding unit tests to PR #${pullRequest.number} on branch: ${branchName}`);
+            // Generate a summary of the unit tests with the number of test case according to the testCases array
+            const unitTestsSummary = `Generated ${testCases.length} unit tests`;
+            // Update the PR description with the unit tests summary
+            // const currentDescription = pullRequest.body || '';
+            // const updatedDescription = `${currentDescription}\n\n## Generated Unit Tests\n\n${unitTestsSummary}`;
+            // await octokit.rest.pulls.update({
+            //   ...repo,
+            //   pull_number: pullRequest.number,
+            //   body: updatedDescription,
+            // });
+            // console.log('PR description updated with unit tests summary.');
+            // Create a new file with the generated unit tests
+            const unitTestsContent = testCases.map(tc => tc.code).join('\n\n');
+            const unitTestsFileName = 'generated_unit_tests.py'; // or .ts, depending on your project
+            await octokit.rest.repos.createOrUpdateFileContents({
+                ...repo,
+                path: unitTestsFileName,
+                message: 'Add generated unit tests',
+                content: Buffer.from(unitTestsContent).toString('base64'),
+                branch: branchName,
+            });
+            console.log(`Unit tests added to PR as ${unitTestsFileName}`);
         }
         catch (error) {
             console.error('Error occurred while pushing the changes to the PR branch', error);
@@ -410,7 +423,7 @@ async function run() {
         }
         // branch to generate unit tests suite
         if (generateUnitTestSuite) {
-            await generateUnitTestsSuite(bedrockClient, modelId);
+            await generateUnitTestsSuite(bedrockClient, modelId, octokit, repo);
         }
         let reviewComments = [];
         for (const file of files) {

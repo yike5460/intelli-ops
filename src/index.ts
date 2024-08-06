@@ -11,8 +11,10 @@ import * as fs from 'fs';
 
 interface PullRequest {
   number: number;
+  body: string;
   head: {
     sha: string;
+    ref: string;
   };
 }
 
@@ -136,7 +138,7 @@ async function generatePRDescription(files: PullFile[], octokit: ReturnType<type
   return description;
 }
 
-async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string): Promise<void> {
+async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }): Promise<void> {
   const pullRequest = context.payload.pull_request as PullRequest;
   // Generate and run unit tests
   // Execute the code_layout.sh script
@@ -158,23 +160,43 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
   }
   console.log('Unit tests and report generated successfully.');
   // Add the generated unit tests to existing PR
-  if (context.payload.pull_request) {
+  if (pullRequest) {
     try {
-      // include git config to push the changes to the PR
-      execSync('git config --global user.email "github-actions[bot]@users.noreply.github.com"');
-      execSync('git config --global user.name "github-actions[bot]"');
-      const branchName = context.payload.pull_request?.['head'].ref;
+      const branchName = pullRequest.head.ref;
+      const testCases: any[] = []; // Declare the testCases variable
+
       if (!branchName) {
         throw new Error('Unable to determine the branch name');
       }
-      console.log(`Pushing the changes to the PR branch: ${branchName}`);
-      // fetch the latest changes
-      execSync('git fetch origin');
-      // checkout to the PR branch
-      execSync(`git checkout ${branchName}`);
-      // add the generated unit tests to the PR, commit and push the changes
-      execSync(`git add . && git commit -m "Add unit tests" && git push origin HEAD:refs/heads/${branchName}`, { stdio: 'inherit' });
-      console.log('Unit tests and report generated and pushed to PR');
+
+      console.log(`Adding unit tests to PR #${pullRequest.number} on branch: ${branchName}`);
+
+      // Generate a summary of the unit tests with the number of test case according to the testCases array
+      const unitTestsSummary = `Generated ${testCases.length} unit tests`;
+
+      // Update the PR description with the unit tests summary
+      // const currentDescription = pullRequest.body || '';
+      // const updatedDescription = `${currentDescription}\n\n## Generated Unit Tests\n\n${unitTestsSummary}`;
+      // await octokit.rest.pulls.update({
+      //   ...repo,
+      //   pull_number: pullRequest.number,
+      //   body: updatedDescription,
+      // });
+      // console.log('PR description updated with unit tests summary.');
+
+      // Create a new file with the generated unit tests
+      const unitTestsContent = testCases.map(tc => tc.code).join('\n\n');
+      const unitTestsFileName = 'generated_unit_tests.py';  // or .ts, depending on your project
+
+      await octokit.rest.repos.createOrUpdateFileContents({
+        ...repo,
+        path: unitTestsFileName,
+        message: 'Add generated unit tests',
+        content: Buffer.from(unitTestsContent).toString('base64'),
+        branch: branchName,
+      });
+      console.log(`Unit tests added to PR as ${unitTestsFileName}`);
+
     } catch (error) {
       console.error('Error occurred while pushing the changes to the PR branch', error);
       throw error;
@@ -435,7 +457,7 @@ async function run(): Promise<void> {
 
     // branch to generate unit tests suite
     if (generateUnitTestSuite) {
-      await generateUnitTestsSuite(bedrockClient, modelId);
+      await generateUnitTestsSuite(bedrockClient, modelId, octokit, repo);
     }
 
     let reviewComments: ReviewComment[] = [];
