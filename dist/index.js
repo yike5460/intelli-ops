@@ -139,7 +139,7 @@ async function generatePRDescription(files, octokit, repo, pullNumber) {
 }
 async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     const pullRequest = github_1.context.payload.pull_request;
-    // Generate and run unit tests
+    console.log('Generating unit tests suite for PR #', pullRequest.number);
     // Execute the code_layout.sh script
     const outputFile = 'combined_code_dump.txt';
     const scriptPath = path.join(__dirname, 'code_layout.sh');

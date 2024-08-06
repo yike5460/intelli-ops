@@ -140,7 +140,8 @@ async function generatePRDescription(files: PullFile[], octokit: ReturnType<type
 
 async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }): Promise<void> {
   const pullRequest = context.payload.pull_request as PullRequest;
-  // Generate and run unit tests
+  console.log('Generating unit tests suite for PR #', pullRequest.number);
+
   // Execute the code_layout.sh script
   const outputFile = 'combined_code_dump.txt';
   const scriptPath = path.join(__dirname, 'code_layout.sh');
