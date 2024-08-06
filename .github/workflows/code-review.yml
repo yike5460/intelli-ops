@@ -5,13 +5,19 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+    # Avoid running the same workflow on the same branch concurrently
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
 jobs:
   review:
     runs-on: ubuntu-latest
     permissions:
       # read repository contents and write pull request comments
       id-token: write
-      contents: read
+      # allow github action bot to push new content into existing pull requests
+      contents: write
+      # contents: read
       pull-requests: write
     steps:
     - name: Checkout code
@@ -49,10 +55,15 @@ jobs:
         aws-region: us-east-1
 
     - name: Code review using AWS Bedrock
-      uses: yike5460/intelli-ops@v0.0.4
+      uses: yike5460/intelli-ops@v0.0.26
       with:
         # Automatic Provision: The GITHUB_TOKEN is automatically created and provided by GitHub for each workflow run. You don't need to manually create or store this token as a secret.
         github-token: ${{ secrets.GITHUB_TOKEN }}
         aws-region: us-east-1
+        model-id: anthropic.claude-3-sonnet-20240229-v1:0
+        exclude-files: '*.md,*.json'
+        review-level: 'concise'
+        generate-pr-description: 'true'
+        generate-unit-test-suite: 'true'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

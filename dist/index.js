@@ -30,9 +30,17 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.invokeModel = invokeModel;
 const core = __importStar(__nccwpck_require__(2186));
 const github_1 = __nccwpck_require__(5438);
 const client_bedrock_runtime_1 = __nccwpck_require__(9687);
+// current we support typescript and python, while the python library is not available yet, we will use typescript as the default language
+// using abosolute path to import the functions from ut_ts.ts
+const ut_ts_1 = __nccwpck_require__(3159);
+const child_process_1 = __nccwpck_require__(2081);
+const path = __importStar(__nccwpck_require__(1017));
+const fs = __importStar(__nccwpck_require__(7147));
+// This function splits the content into chunks of maxChunkSize
 function splitContentIntoChunks(content, maxChunkSize) {
     const chunks = [];
     let currentChunk = '';
@@ -48,9 +56,148 @@ function splitContentIntoChunks(content, maxChunkSize) {
     }
     return chunks;
 }
+function shouldExcludeFile(filename, excludePatterns) {
+    return excludePatterns.some(pattern => {
+        const regex = new RegExp(`^${pattern.replace(/\*/g, '.*')}$`);
+        return regex.test(filename);
+    });
+}
+const pr_generation_prompt = `
+<task context>
+You are a developer tasked with creating a pull request (PR) for a software project. Your primary goal is to provide a clear and informative description of the changes you are proposing.
+</task context>
+
+<tone context>
+Maintain a professional and informative tone. Be clear and concise in your descriptions.
+</tone context>
+
+<code_change>
+This pull request includes the following changes:
+[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]
+</code_change>
+
+<detailed_task_description>
+Please include a summary of the changes in one of the following categories:
+- Bug fix (non-breaking change which fixes an issue)
+- New feature (non-breaking change which adds functionality)
+- Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- This change requires a documentation update
+
+Please also include relevant motivation and context. List any dependencies that are required for this change.
+</detailed_task_description>
+
+<output_format>
+Provide your PR description in the following format:
+# Description
+[Insert the PR description here]
+
+## Type of change
+[Select one of the following options in the checkbox]
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] This change requires a documentation update
+</output_format>
+`;
+const fixed_pr_generation_template = `
+# How Has This Been Tested?
+
+Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce. Please also list any relevant details for your test configuration
+
+- [ ] Test A
+- [ ] Test B
+
+**Test Configuration**:
+* Firmware version:
+* Hardware:
+* Toolchain:
+* SDK:
+
+# Checklist:
+
+- [ ] My code follows the style guidelines of this project
+- [ ] I have performed a self-review of my code
+- [ ] I have commented my code, particularly in hard-to-understand areas
+- [ ] I have made corresponding changes to the documentation
+- [ ] My changes generate no new warnings
+- [ ] I have added tests that prove my fix is effective or that my feature works
+- [ ] New and existing unit tests pass locally with my changes
+- [ ] Any dependent changes have been merged and published in downstream modules
+`;
+async function generatePRDescription(files, octokit, repo, pullNumber) {
+    const pullRequest = github_1.context.payload.pull_request;
+    const fileChanges = await Promise.all(files.map(async (file) => {
+        const { data: content } = await octokit.rest.repos.getContent({
+            ...repo,
+            path: file.filename,
+            ref: pullRequest.head.sha,
+        });
+        return `${file.filename}: ${file.status}`;
+    }));
+    const description = pr_generation_prompt.replace('[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]', fileChanges.join('\n'));
+    return description;
+}
+async function generateUnitTestsSuite(client, modelId, octokit, repo) {
+    const pullRequest = github_1.context.payload.pull_request;
+    console.log('Generating unit tests suite for PR #', pullRequest.number);
+    // Execute the code_layout.sh script
+    const outputFile = 'combined_code_dump.txt';
+    const scriptPath = path.join(__dirname, 'code_layout.sh');
+    (0, child_process_1.execSync)(`chmod +x "${scriptPath}" && "${scriptPath}" . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
+    // Read the combined code
+    const combinedCode = fs.readFileSync(outputFile, 'utf8');
+    // TODO, split the content into chunks of maxChunkSize, truncate the content if it exceeds the maxChunkSize
+    const maxChunkSize = 1024;
+    const chunks = splitContentIntoChunks(combinedCode, maxChunkSize);
+    if (chunks[0] !== undefined) {
+        // log the processing phase
+        console.log(`Processing chunk 1 of ${chunks.length}`);
+        const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, chunks[0]);
+        await (0, ut_ts_1.runUnitTests)(testCases);
+        await (0, ut_ts_1.generateTestReport)(testCases);
+    }
+    console.log('Unit tests and report generated successfully.');
+    // Add the generated unit tests to existing PR
+    if (pullRequest) {
+        try {
+            const branchName = pullRequest.head.ref;
+            const testCases = []; // Declare the testCases variable
+            if (!branchName) {
+                throw new Error('Unable to determine the branch name');
+            }
+            console.log(`Adding unit tests to PR #${pullRequest.number} on branch: ${branchName}`);
+            // Generate a summary of the unit tests with the number of test case according to the testCases array
+            const unitTestsSummary = `Generated ${testCases.length} unit tests`;
+            // Update the PR description with the unit tests summary
+            // const currentDescription = pullRequest.body || '';
+            // const updatedDescription = `${currentDescription}\n\n## Generated Unit Tests\n\n${unitTestsSummary}`;
+            // await octokit.rest.pulls.update({
+            //   ...repo,
+            //   pull_number: pullRequest.number,
+            //   body: updatedDescription,
+            // });
+            // console.log('PR description updated with unit tests summary.');
+            // Create a new file with the generated unit tests
+            const unitTestsContent = testCases.map(tc => tc.code).join('\n\n');
+            const unitTestsFileName = 'generated_unit_tests.py'; // or .ts, depending on your project
+            await octokit.rest.repos.createOrUpdateFileContents({
+                ...repo,
+                path: unitTestsFileName,
+                message: 'Add generated unit tests',
+                content: Buffer.from(unitTestsContent).toString('base64'),
+                branch: branchName,
+            });
+            console.log(`Unit tests added to PR as ${unitTestsFileName}`);
+        }
+        catch (error) {
+            console.error('Error occurred while pushing the changes to the PR branch', error);
+            throw error;
+        }
+    }
+}
 // Refer to https://google.github.io/eng-practices/review/reviewer/looking-for.html and https://google.github.io/eng-practices/review/reviewer/standard.html
-const code_review_prompt_template = `<task_context>
-You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress.
+const detailed_review_prompt = `<task_context>
+You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress. Your feedback should be constructive, educational, and focused on the most important issues.
 </task_context>
 
 <tone_context>
@@ -66,6 +213,8 @@ Maintain a constructive and educational tone. Be thorough but not overly pedanti
 [Insert the code change to be reviewed, including file names and line numbers if applicable]
 </code_change>
 </background_data>
+
+Provide your review in ONLY one of the following formats, if changed code is too simple or not fitting in categories below, please answer "No review needed":
 
 <detailed_task_description>
 Review the provided code change, considering the following aspects:
@@ -97,10 +246,10 @@ Provide feedback on these aspects, categorizing your comments as follows:
 </rules>
 
 <output_format>
-Provide your review in the following format:
+Provide your review in the following format. Limit your response to 200 words. Note if changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't include any further details in categories below.
 
 Summary:
-[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes" in one of categories below]
+[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below]
 
 Critical Issues:
 [List any critical issues that need to be addressed]
@@ -110,25 +259,141 @@ Improvements:
 
 Nitpicks:
 [List any nitpicks or minor suggestions]
-
-Positive Feedback:
-[Mention any particularly good aspects of the code change]
 </output_format>
 
 <immediate_task>
 Please review the provided code change and provide your feedback following the guidelines and format specified above.
 </immediate_task>
 `;
+const concise_review_prompt = `
+<task_context>
+You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress. Your feedback should be constructive, educational, and focused on the most important issues.
+</task_context>
+
+<tone_context>
+Maintain a constructive and educational tone. Be thorough but not overly pedantic. Remember that the goal is continuous improvement, not perfection.
+</tone_context>
+
+<code_change>
+[Insert the code change to be reviewed, including file names and line numbers if applicable]
+</code_change>
+
+<detailed_task_description>
+Review the provided code change, considering the following aspects:
+1. Design: Evaluate the overall design and how it integrates with the existing system.
+2. Functionality: Assess if the code does what it's intended to do and if it's good for the users.
+3. Complexity: Check if the code is more complex than necessary.
+4. Tests: Verify the presence and quality of unit, integration, or end-to-end tests.
+5. Naming: Ensure clear and appropriate naming for variables, functions, and classes.
+6. Comments: Check for clear and useful comments that explain why, not what.
+7. Style: Verify adherence to the project's style guide.
+8. Documentation: Check if necessary documentation is updated or added.
+9. Potential issues: Look for possible concurrency problems, edge cases, or error handling issues.
+10. Code health: Assess if the change improves the overall code health of the system.
+
+Provide feedback on these aspects, categorizing your comments as follows:
+- Critical: Issues that must be addressed before approval.
+- Improvement: Suggestions that would significantly improve the code but aren't blocking.
+</detailed_task_description>
+
+<rules>
+1. Focus on the most important issues that affect code health and functionality.
+2. Balance the need for improvement with the need to make progress.
+3. Be specific in your feedback, referencing line numbers when applicable.
+4. Explain the reasoning behind your suggestions, especially for design-related feedback.
+5. If suggesting an alternative approach, briefly explain its benefits.
+6. Acknowledge good practices and improvements in the code.
+7. If relevant, mention any educational points that could help the developer learn, prefixed with "Learning opportunity:".
+</rules>
+
+<output_format>
+Provide your review in the following format. Limit your response to 200 words. Note if changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't include any further details in categories below.
+
+Summary:
+[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below, Note if changed code is too simple or not fitting in categories below, please answer "No Review Needed, LGTM!" directly. Limit your response to 200 words.]
+
+Critical Issues:
+[List any critical issues that need to be addressed]
+
+Improvements:
+[List suggested improvements]
+
+</output_format>
+
+<immediate_task>
+Please review the provided code change and provide your feedback following the guidelines and format specified above.
+</immediate_task>
+`;
+async function invokeModel(client, modelId, payloadInput) {
+    // seperate branch to invoke RESTFul endpoint exposed by API Gateway, if the modelId is prefixed with string like "sagemaker.<api id>.execute-api.<region>.amazonaws.com/prod"
+    if (modelId.startsWith("sagemaker.")) {
+        // invoke RESTFul endpoint e.g. curl -X POST -H "Content-Type: application/json" -d '{"prompt": "import argparse\ndef main(string: str):\n    print(string)\n    print(string[::-1])\n    if __name__ == \"__main__\":", "parameters": {"max_new_tokens": 256, "temperature": 0.1}}' https://<api id>.execute-api.<region>.amazonaws.com/prod
+        const endpoint = modelId.split("sagemaker.")[1];
+        // invoke the RESTFul endpoint with the payload
+        const payload = {
+            prompt: payloadInput,
+            parameters: {
+                max_new_tokens: 256,
+                temperature: 0.1,
+            },
+        };
+        const response = await fetch(`https://${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        const responseBody = await response.json();
+        // extract the generated text from the response, the output payload should be in the format { "generated_text": "..." } using codellama model for now 
+        const finalResult = responseBody.generated_text;
+        return finalResult;
+    }
+    const payload = {
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: 4096,
+        messages: [
+            {
+                role: "user",
+                content: [{
+                        type: "text",
+                        text: payloadInput,
+                    }],
+            },
+        ],
+    };
+    const command = new client_bedrock_runtime_1.InvokeModelCommand({
+        // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+        modelId: modelId,
+        contentType: "application/json",
+        body: JSON.stringify(payload),
+    });
+    const apiResponse = await client.send(command);
+    const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
+    const responseBody = JSON.parse(decodedResponseBody);
+    const finalResult = responseBody.content[0].text;
+    return finalResult;
+}
 async function run() {
     try {
         const githubToken = core.getInput('github-token');
         const awsRegion = core.getInput('aws-region');
+        const modelId = core.getInput('model-id');
+        const excludeFiles = core.getInput('exclude-files');
+        const reviewLevel = core.getInput('review-level');
+        const generatePRDesc = core.getInput('generate-pr-description');
+        const generateUnitTestSuite = core.getInput('generate-unit-test-suite');
+        const excludePatterns = excludeFiles ? excludeFiles.split(',').map(p => p.trim()) : [];
         console.log(`GitHub Token: ${githubToken ? 'Token is set' : 'Token is not set'}`);
         console.log(`AWS Region: ${awsRegion}`);
+        console.log(`Model ID: ${modelId}`);
+        console.log(`Excluded files: ${excludeFiles}`);
+        console.log(`Review level: ${reviewLevel}`);
+        console.log(`Generate PR description: ${generatePRDesc ? 'Yes' : 'No'}`);
         if (!githubToken) {
             throw new Error('GitHub token is not set');
         }
-        const client = new client_bedrock_runtime_1.BedrockRuntimeClient({ region: awsRegion || 'us-east-1' });
+        const bedrockClient = new client_bedrock_runtime_1.BedrockRuntimeClient({ region: awsRegion || 'us-east-1' });
         const octokit = (0, github_1.getOctokit)(githubToken);
         if (!github_1.context.payload.pull_request) {
             console.log('No pull request found in the context. This action should be run only on pull request events.');
@@ -141,10 +406,29 @@ async function run() {
             ...repo,
             pull_number: pullRequest.number,
         });
+        // branch to generate PR description
+        if (generatePRDesc) {
+            const prDescriptionTemplate = await generatePRDescription(files, octokit, repo, pullRequest.number);
+            // invoke model to generate complete PR description
+            const payloadInput = prDescriptionTemplate;
+            const prDescription = await invokeModel(bedrockClient, modelId, payloadInput);
+            // append fixed template content to the generated PR description
+            const prDescriptionWithTemplate = prDescription + fixed_pr_generation_template;
+            await octokit.rest.pulls.update({
+                ...repo,
+                pull_number: pullRequest.number,
+                body: prDescriptionWithTemplate,
+            });
+            console.log('PR description updated successfully.');
+        }
+        // branch to generate unit tests suite
+        if (generateUnitTestSuite) {
+            await generateUnitTestsSuite(bedrockClient, modelId, octokit, repo);
+        }
         let reviewComments = [];
         for (const file of files) {
-            if (file.status !== 'removed' && file.patch) {
-                console.log(`Reviewing file: ${file.filename} with file patch content: ${file.patch}`);
+            if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
+                console.log(`Reviewing file: ${file.filename}`);
                 const changedLines = file.patch
                     .split('\n')
                     .filter(line => line.startsWith('+') && !line.startsWith('+++'))
@@ -152,36 +436,19 @@ async function run() {
                 if (changedLines.length === 0)
                     continue;
                 const fileContent = changedLines.join('\n');
-                // Split the file content into chunks if it exceeds the maximum token limit
-                const chunks = splitContentIntoChunks(fileContent, 4096);
-                if (chunks.length > 1) {
-                    console.log(`File content exceeds the maximum token limit. Splitting into ${chunks.length} chunks.`);
+                const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
+                let formattedContent = promptTemplate.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
+                // invoke model to generate review comments
+                const payloadInput = formattedContent;
+                var review = await invokeModel(bedrockClient, modelId, payloadInput);
+                // log the generated review comments and check if it is empty
+                console.log(`Review comments ${review} generated for file: ${file.filename}`);
+                if (!review || review.trim() == '') {
+                    console.log("No review comments generated for file: {}", file.filename);
+                    // add default review comment
+                    review = "No review needed, LGTM!";
+                    continue;
                 }
-                // format the finaly prompt passed to the model with actual input for the placeholder
-                let formattedContent = code_review_prompt_template.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
-                const payload = {
-                    anthropic_version: "bedrock-2023-05-31",
-                    max_tokens: 4096,
-                    messages: [
-                        {
-                            role: "user",
-                            content: [{
-                                    type: "text",
-                                    text: formattedContent,
-                                }],
-                        },
-                    ],
-                };
-                const command = new client_bedrock_runtime_1.InvokeModelCommand({
-                    modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
-                    contentType: "application/json",
-                    body: JSON.stringify(payload),
-                });
-                const apiResponse = await client.send(command);
-                const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
-                const responseBody = JSON.parse(decodedResponseBody);
-                const review = responseBody.content[0].text;
-                // Calculate the position for the comment
                 const position = file.patch.split('\n').findIndex(line => line.startsWith('+') && !line.startsWith('+++')) + 1;
                 if (position > 0) {
                     reviewComments.push({
@@ -190,6 +457,9 @@ async function run() {
                         position: position,
                     });
                 }
+            }
+            else {
+                console.log(`Skipping file: ${file.filename}`);
             }
         }
         if (reviewComments.length > 0) {
@@ -2905,6 +3175,7 @@ __export(src_exports, {
   ResponseStream: () => ResponseStream,
   ResponseStreamFilterSensitiveLog: () => ResponseStreamFilterSensitiveLog,
   ServiceQuotaExceededException: () => ServiceQuotaExceededException,
+  ServiceUnavailableException: () => ServiceUnavailableException,
   StopReason: () => StopReason,
   SystemContentBlock: () => SystemContentBlock,
   ThrottlingException: () => ThrottlingException,
@@ -3487,6 +3758,23 @@ var _ModelTimeoutException = class _ModelTimeoutException extends BedrockRuntime
 };
 __name(_ModelTimeoutException, "ModelTimeoutException");
 var ModelTimeoutException = _ModelTimeoutException;
+var _ServiceUnavailableException = class _ServiceUnavailableException extends BedrockRuntimeServiceException {
+  /**
+   * @internal
+   */
+  constructor(opts) {
+    super({
+      name: "ServiceUnavailableException",
+      $fault: "server",
+      ...opts
+    });
+    this.name = "ServiceUnavailableException";
+    this.$fault = "server";
+    Object.setPrototypeOf(this, _ServiceUnavailableException.prototype);
+  }
+};
+__name(_ServiceUnavailableException, "ServiceUnavailableException");
+var ServiceUnavailableException = _ServiceUnavailableException;
 var GuardrailStreamProcessingMode = {
   ASYNC: "async",
   SYNC: "sync"
@@ -3551,6 +3839,8 @@ var ConverseStreamOutput;
       return visitor.validationException(value.validationException);
     if (value.throttlingException !== void 0)
       return visitor.throttlingException(value.throttlingException);
+    if (value.serviceUnavailableException !== void 0)
+      return visitor.serviceUnavailableException(value.serviceUnavailableException);
     return visitor._(value.$unknown[0], value.$unknown[1]);
   }, "visit");
 })(ConverseStreamOutput || (ConverseStreamOutput = {}));
@@ -3573,6 +3863,8 @@ var ResponseStream;
       return visitor.throttlingException(value.throttlingException);
     if (value.modelTimeoutException !== void 0)
       return visitor.modelTimeoutException(value.modelTimeoutException);
+    if (value.serviceUnavailableException !== void 0)
+      return visitor.serviceUnavailableException(value.serviceUnavailableException);
     return visitor._(value.$unknown[0], value.$unknown[1]);
   }, "visit");
 })(ResponseStream || (ResponseStream = {}));
@@ -3597,6 +3889,8 @@ var ConverseStreamOutputFilterSensitiveLog = /* @__PURE__ */ __name((obj) => {
     return { validationException: obj.validationException };
   if (obj.throttlingException !== void 0)
     return { throttlingException: obj.throttlingException };
+  if (obj.serviceUnavailableException !== void 0)
+    return { serviceUnavailableException: obj.serviceUnavailableException };
   if (obj.$unknown !== void 0)
     return { [obj.$unknown[0]]: "UNKNOWN" };
 }, "ConverseStreamOutputFilterSensitiveLog");
@@ -3633,6 +3927,8 @@ var ResponseStreamFilterSensitiveLog = /* @__PURE__ */ __name((obj) => {
     return { throttlingException: obj.throttlingException };
   if (obj.modelTimeoutException !== void 0)
     return { modelTimeoutException: obj.modelTimeoutException };
+  if (obj.serviceUnavailableException !== void 0)
+    return { serviceUnavailableException: obj.serviceUnavailableException };
   if (obj.$unknown !== void 0)
     return { [obj.$unknown[0]]: "UNKNOWN" };
 }, "ResponseStreamFilterSensitiveLog");
@@ -3845,6 +4141,9 @@ var de_CommandError = /* @__PURE__ */ __name(async (output, context) => {
     case "ModelTimeoutException":
     case "com.amazonaws.bedrockruntime#ModelTimeoutException":
       throw await de_ModelTimeoutExceptionRes(parsedOutput, context);
+    case "ServiceUnavailableException":
+    case "com.amazonaws.bedrockruntime#ServiceUnavailableException":
+      throw await de_ServiceUnavailableExceptionRes(parsedOutput, context);
     case "ModelStreamErrorException":
     case "com.amazonaws.bedrockruntime#ModelStreamErrorException":
       throw await de_ModelStreamErrorExceptionRes(parsedOutput, context);
@@ -3966,6 +4265,19 @@ var de_ServiceQuotaExceededExceptionRes = /* @__PURE__ */ __name(async (parsedOu
   });
   return (0, import_smithy_client.decorateServiceException)(exception, parsedOutput.body);
 }, "de_ServiceQuotaExceededExceptionRes");
+var de_ServiceUnavailableExceptionRes = /* @__PURE__ */ __name(async (parsedOutput, context) => {
+  const contents = (0, import_smithy_client.map)({});
+  const data = parsedOutput.body;
+  const doc = (0, import_smithy_client.take)(data, {
+    message: import_smithy_client.expectString
+  });
+  Object.assign(contents, doc);
+  const exception = new ServiceUnavailableException({
+    $metadata: deserializeMetadata(parsedOutput),
+    ...contents
+  });
+  return (0, import_smithy_client.decorateServiceException)(exception, parsedOutput.body);
+}, "de_ServiceUnavailableExceptionRes");
 var de_ThrottlingExceptionRes = /* @__PURE__ */ __name(async (parsedOutput, context) => {
   const contents = (0, import_smithy_client.map)({});
   const data = parsedOutput.body;
@@ -4047,6 +4359,14 @@ var de_ConverseStreamOutput = /* @__PURE__ */ __name((output, context) => {
         throttlingException: await de_ThrottlingException_event(event["throttlingException"], context)
       };
     }
+    if (event["serviceUnavailableException"] != null) {
+      return {
+        serviceUnavailableException: await de_ServiceUnavailableException_event(
+          event["serviceUnavailableException"],
+          context
+        )
+      };
+    }
     return { $unknown: output };
   });
 }, "de_ConverseStreamOutput");
@@ -4083,6 +4403,14 @@ var de_ResponseStream = /* @__PURE__ */ __name((output, context) => {
     if (event["modelTimeoutException"] != null) {
       return {
         modelTimeoutException: await de_ModelTimeoutException_event(event["modelTimeoutException"], context)
+      };
+    }
+    if (event["serviceUnavailableException"] != null) {
+      return {
+        serviceUnavailableException: await de_ServiceUnavailableException_event(
+          event["serviceUnavailableException"],
+          context
+        )
       };
     }
     return { $unknown: output };
@@ -4151,6 +4479,13 @@ var de_PayloadPart_event = /* @__PURE__ */ __name(async (output, context) => {
   Object.assign(contents, de_PayloadPart(data, context));
   return contents;
 }, "de_PayloadPart_event");
+var de_ServiceUnavailableException_event = /* @__PURE__ */ __name(async (output, context) => {
+  const parsedOutput = {
+    ...output,
+    body: await (0, import_core2.parseJsonBody)(output.body, context)
+  };
+  return de_ServiceUnavailableExceptionRes(parsedOutput, context);
+}, "de_ServiceUnavailableException_event");
 var de_ThrottlingException_event = /* @__PURE__ */ __name(async (output, context) => {
   const parsedOutput = {
     ...output,
@@ -8370,6 +8705,15 @@ var import_EndpointParameters9 = __nccwpck_require__(510);
 
 // src/defaultStsRoleAssumers.ts
 var ASSUME_ROLE_DEFAULT_REGION = "us-east-1";
+var getAccountIdFromAssumedRoleUser = /* @__PURE__ */ __name((assumedRoleUser) => {
+  if (typeof (assumedRoleUser == null ? void 0 : assumedRoleUser.Arn) === "string") {
+    const arnComponents = assumedRoleUser.Arn.split(":");
+    if (arnComponents.length > 4 && arnComponents[4] !== "") {
+      return arnComponents[4];
+    }
+  }
+  return void 0;
+}, "getAccountIdFromAssumedRoleUser");
 var resolveRegion = /* @__PURE__ */ __name(async (_region, _parentRegion, credentialProviderLogger) => {
   var _a2;
   const region = typeof _region === "function" ? await _region() : _region;
@@ -8410,17 +8754,19 @@ var getDefaultRoleAssumer = /* @__PURE__ */ __name((stsOptions, stsClientCtor) =
         logger
       });
     }
-    const { Credentials: Credentials2 } = await stsClient.send(new AssumeRoleCommand(params));
+    const { Credentials: Credentials2, AssumedRoleUser: AssumedRoleUser2 } = await stsClient.send(new AssumeRoleCommand(params));
     if (!Credentials2 || !Credentials2.AccessKeyId || !Credentials2.SecretAccessKey) {
       throw new Error(`Invalid response from STS.assumeRole call with role ${params.RoleArn}`);
     }
+    const accountId = getAccountIdFromAssumedRoleUser(AssumedRoleUser2);
     return {
       accessKeyId: Credentials2.AccessKeyId,
       secretAccessKey: Credentials2.SecretAccessKey,
       sessionToken: Credentials2.SessionToken,
       expiration: Credentials2.Expiration,
       // TODO(credentialScope): access normally when shape is updated.
-      credentialScope: Credentials2.CredentialScope
+      ...Credentials2.CredentialScope && { credentialScope: Credentials2.CredentialScope },
+      ...accountId && { accountId }
     };
   };
 }, "getDefaultRoleAssumer");
@@ -8446,17 +8792,19 @@ var getDefaultRoleAssumerWithWebIdentity = /* @__PURE__ */ __name((stsOptions, s
         logger
       });
     }
-    const { Credentials: Credentials2 } = await stsClient.send(new AssumeRoleWithWebIdentityCommand(params));
+    const { Credentials: Credentials2, AssumedRoleUser: AssumedRoleUser2 } = await stsClient.send(new AssumeRoleWithWebIdentityCommand(params));
     if (!Credentials2 || !Credentials2.AccessKeyId || !Credentials2.SecretAccessKey) {
       throw new Error(`Invalid response from STS.assumeRoleWithWebIdentity call with role ${params.RoleArn}`);
     }
+    const accountId = getAccountIdFromAssumedRoleUser(AssumedRoleUser2);
     return {
       accessKeyId: Credentials2.AccessKeyId,
       secretAccessKey: Credentials2.SecretAccessKey,
       sessionToken: Credentials2.SessionToken,
       expiration: Credentials2.Expiration,
       // TODO(credentialScope): access normally when shape is updated.
-      credentialScope: Credentials2.CredentialScope
+      ...Credentials2.CredentialScope && { credentialScope: Credentials2.CredentialScope },
+      ...accountId && { accountId }
     };
   };
 }, "getDefaultRoleAssumerWithWebIdentity");
@@ -9192,6 +9540,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/index.ts
 var src_exports = {};
 __export(src_exports, {
+  ENV_ACCOUNT_ID: () => ENV_ACCOUNT_ID,
   ENV_CREDENTIAL_SCOPE: () => ENV_CREDENTIAL_SCOPE,
   ENV_EXPIRATION: () => ENV_EXPIRATION,
   ENV_KEY: () => ENV_KEY,
@@ -9208,6 +9557,7 @@ var ENV_SECRET = "AWS_SECRET_ACCESS_KEY";
 var ENV_SESSION = "AWS_SESSION_TOKEN";
 var ENV_EXPIRATION = "AWS_CREDENTIAL_EXPIRATION";
 var ENV_CREDENTIAL_SCOPE = "AWS_CREDENTIAL_SCOPE";
+var ENV_ACCOUNT_ID = "AWS_ACCOUNT_ID";
 var fromEnv = /* @__PURE__ */ __name((init) => async () => {
   var _a;
   (_a = init == null ? void 0 : init.logger) == null ? void 0 : _a.debug("@aws-sdk/credential-provider-env - fromEnv");
@@ -9216,13 +9566,15 @@ var fromEnv = /* @__PURE__ */ __name((init) => async () => {
   const sessionToken = process.env[ENV_SESSION];
   const expiry = process.env[ENV_EXPIRATION];
   const credentialScope = process.env[ENV_CREDENTIAL_SCOPE];
+  const accountId = process.env[ENV_ACCOUNT_ID];
   if (accessKeyId && secretAccessKey) {
     return {
       accessKeyId,
       secretAccessKey,
       ...sessionToken && { sessionToken },
       ...expiry && { expiration: new Date(expiry) },
-      ...credentialScope && { credentialScope }
+      ...credentialScope && { credentialScope },
+      ...accountId && { accountId }
     };
   }
   throw new import_property_provider.CredentialsProviderError("Unable to find environment variable credentials.", { logger: init == null ? void 0 : init.logger });
@@ -9650,7 +10002,7 @@ var resolveSsoCredentials = /* @__PURE__ */ __name(async (profile, options = {})
 var isSsoProfile = /* @__PURE__ */ __name((arg) => arg && (typeof arg.sso_start_url === "string" || typeof arg.sso_account_id === "string" || typeof arg.sso_session === "string" || typeof arg.sso_region === "string" || typeof arg.sso_role_name === "string"), "isSsoProfile");
 
 // src/resolveStaticCredentials.ts
-var isStaticCredsProfile = /* @__PURE__ */ __name((arg) => Boolean(arg) && typeof arg === "object" && typeof arg.aws_access_key_id === "string" && typeof arg.aws_secret_access_key === "string" && ["undefined", "string"].indexOf(typeof arg.aws_session_token) > -1, "isStaticCredsProfile");
+var isStaticCredsProfile = /* @__PURE__ */ __name((arg) => Boolean(arg) && typeof arg === "object" && typeof arg.aws_access_key_id === "string" && typeof arg.aws_secret_access_key === "string" && ["undefined", "string"].indexOf(typeof arg.aws_session_token) > -1 && ["undefined", "string"].indexOf(typeof arg.aws_account_id) > -1, "isStaticCredsProfile");
 var resolveStaticCredentials = /* @__PURE__ */ __name((profile, options) => {
   var _a;
   (_a = options == null ? void 0 : options.logger) == null ? void 0 : _a.debug("@aws-sdk/credential-provider-ini - resolveStaticCredentials");
@@ -9658,7 +10010,8 @@ var resolveStaticCredentials = /* @__PURE__ */ __name((profile, options) => {
     accessKeyId: profile.aws_access_key_id,
     secretAccessKey: profile.aws_secret_access_key,
     sessionToken: profile.aws_session_token,
-    credentialScope: profile.aws_credential_scope
+    ...profile.aws_credential_scope && { credentialScope: profile.aws_credential_scope },
+    ...profile.aws_account_id && { accountId: profile.aws_account_id }
   });
 }, "resolveStaticCredentials");
 
@@ -9915,7 +10268,8 @@ var import_child_process = __nccwpck_require__(2081);
 var import_util = __nccwpck_require__(3837);
 
 // src/getValidatedProcessCredentials.ts
-var getValidatedProcessCredentials = /* @__PURE__ */ __name((profileName, data) => {
+var getValidatedProcessCredentials = /* @__PURE__ */ __name((profileName, data, profiles) => {
+  var _a;
   if (data.Version !== 1) {
     throw Error(`Profile ${profileName} credential_process did not return Version 1.`);
   }
@@ -9929,12 +10283,17 @@ var getValidatedProcessCredentials = /* @__PURE__ */ __name((profileName, data) 
       throw Error(`Profile ${profileName} credential_process returned expired credentials.`);
     }
   }
+  let accountId = data.AccountId;
+  if (!accountId && ((_a = profiles == null ? void 0 : profiles[profileName]) == null ? void 0 : _a.aws_account_id)) {
+    accountId = profiles[profileName].aws_account_id;
+  }
   return {
     accessKeyId: data.AccessKeyId,
     secretAccessKey: data.SecretAccessKey,
     ...data.SessionToken && { sessionToken: data.SessionToken },
     ...data.Expiration && { expiration: new Date(data.Expiration) },
-    ...data.CredentialScope && { credentialScope: data.CredentialScope }
+    ...data.CredentialScope && { credentialScope: data.CredentialScope },
+    ...accountId && { accountId }
   };
 }, "getValidatedProcessCredentials");
 
@@ -9953,7 +10312,7 @@ var resolveProcessCredentials = /* @__PURE__ */ __name(async (profileName, profi
         } catch {
           throw Error(`Profile ${profileName} credential_process returned invalid JSON.`);
         }
-        return getValidatedProcessCredentials(profileName, data);
+        return getValidatedProcessCredentials(profileName, data, profiles);
       } catch (error) {
         throw new import_property_provider.CredentialsProviderError(error.message, { logger });
       }
@@ -10108,14 +10467,23 @@ var resolveSSOCredentials = /* @__PURE__ */ __name(async ({
       logger
     });
   }
-  const { roleCredentials: { accessKeyId, secretAccessKey, sessionToken, expiration, credentialScope } = {} } = ssoResp;
+  const {
+    roleCredentials: { accessKeyId, secretAccessKey, sessionToken, expiration, credentialScope, accountId } = {}
+  } = ssoResp;
   if (!accessKeyId || !secretAccessKey || !sessionToken || !expiration) {
     throw new import_property_provider.CredentialsProviderError("SSO returns an invalid temporary credential.", {
       tryNextLink: SHOULD_FAIL_CREDENTIAL_CHAIN,
       logger
     });
   }
-  return { accessKeyId, secretAccessKey, sessionToken, expiration: new Date(expiration), credentialScope };
+  return {
+    accessKeyId,
+    secretAccessKey,
+    sessionToken,
+    expiration: new Date(expiration),
+    ...credentialScope && { credentialScope },
+    ...accountId && { accountId }
+  };
 }, "resolveSSOCredentials");
 
 // src/validateSsoProfile.ts
@@ -15664,6 +16032,7 @@ __name(_DefaultIdentityProviderConfig, "DefaultIdentityProviderConfig");
 var DefaultIdentityProviderConfig = _DefaultIdentityProviderConfig;
 
 // src/util-identity-and-auth/httpAuthSchemes/httpApiKeyAuth.ts
+
 var import_types = __nccwpck_require__(5756);
 var _HttpApiKeyAuthSigner = class _HttpApiKeyAuthSigner {
   async sign(httpRequest, identity, signingProperties) {
@@ -15681,7 +16050,7 @@ var _HttpApiKeyAuthSigner = class _HttpApiKeyAuthSigner {
     if (!identity.apiKey) {
       throw new Error("request could not be signed with `apiKey` since the `apiKey` is not defined");
     }
-    const clonedRequest = httpRequest.clone();
+    const clonedRequest = import_protocol_http.HttpRequest.clone(httpRequest);
     if (signingProperties.in === import_types.HttpApiKeyAuthLocation.QUERY) {
       clonedRequest.query[signingProperties.name] = identity.apiKey;
     } else if (signingProperties.in === import_types.HttpApiKeyAuthLocation.HEADER) {
@@ -15698,9 +16067,10 @@ __name(_HttpApiKeyAuthSigner, "HttpApiKeyAuthSigner");
 var HttpApiKeyAuthSigner = _HttpApiKeyAuthSigner;
 
 // src/util-identity-and-auth/httpAuthSchemes/httpBearerAuth.ts
+
 var _HttpBearerAuthSigner = class _HttpBearerAuthSigner {
   async sign(httpRequest, identity, signingProperties) {
-    const clonedRequest = httpRequest.clone();
+    const clonedRequest = import_protocol_http.HttpRequest.clone(httpRequest);
     if (!identity.token) {
       throw new Error("request could not be signed with `token` since the `token` is not defined");
     }
@@ -16019,7 +16389,8 @@ var fromImdsCredentials = /* @__PURE__ */ __name((creds) => ({
   accessKeyId: creds.AccessKeyId,
   secretAccessKey: creds.SecretAccessKey,
   sessionToken: creds.Token,
-  expiration: new Date(creds.Expiration)
+  expiration: new Date(creds.Expiration),
+  ...creds.AccountId && { accountId: creds.AccountId }
 }), "fromImdsCredentials");
 
 // src/remoteProvider/RemoteProviderInit.ts
@@ -17276,7 +17647,8 @@ var _FetchHttpHandler = class _FetchHttpHandler {
     if (keepAliveSupport.supported) {
       requestOptions.keepalive = keepAlive;
     }
-    let removeSignalEventListener = null;
+    let removeSignalEventListener = /* @__PURE__ */ __name(() => {
+    }, "removeSignalEventListener");
     const fetchRequest = new Request(url, requestOptions);
     const raceOfPromises = [
       fetch(fetchRequest).then((response) => {
@@ -17724,6 +18096,13 @@ var createConfigValueProvider = /* @__PURE__ */ __name((configKey, canonicalEndp
     return async () => {
       const credentials = typeof config.credentials === "function" ? await config.credentials() : config.credentials;
       const configValue = (credentials == null ? void 0 : credentials.credentialScope) ?? (credentials == null ? void 0 : credentials.CredentialScope);
+      return configValue;
+    };
+  }
+  if (configKey === "accountId" || canonicalEndpointParamKey === "AccountId") {
+    return async () => {
+      const credentials = typeof config.credentials === "function" ? await config.credentials() : config.credentials;
+      const configValue = (credentials == null ? void 0 : credentials.accountId) ?? (credentials == null ? void 0 : credentials.AccountId);
       return configValue;
     };
   }
@@ -21537,24 +21916,11 @@ var hasHeader = /* @__PURE__ */ __name((soughtHeader, headers) => {
   return false;
 }, "hasHeader");
 
-// src/cloneRequest.ts
-var cloneRequest = /* @__PURE__ */ __name(({ headers, query, ...rest }) => ({
-  ...rest,
-  headers: { ...headers },
-  query: query ? cloneQuery(query) : void 0
-}), "cloneRequest");
-var cloneQuery = /* @__PURE__ */ __name((query) => Object.keys(query).reduce((carry, paramName) => {
-  const param = query[paramName];
-  return {
-    ...carry,
-    [paramName]: Array.isArray(param) ? [...param] : param
-  };
-}, {}), "cloneQuery");
-
 // src/moveHeadersToQuery.ts
+var import_protocol_http = __nccwpck_require__(4418);
 var moveHeadersToQuery = /* @__PURE__ */ __name((request, options = {}) => {
   var _a;
-  const { headers, query = {} } = typeof request.clone === "function" ? request.clone() : cloneRequest(request);
+  const { headers, query = {} } = import_protocol_http.HttpRequest.clone(request);
   for (const name of Object.keys(headers)) {
     const lname = name.toLowerCase();
     if (lname.slice(0, 6) === "x-amz-" && !((_a = options.unhoistableHeaders) == null ? void 0 : _a.has(lname))) {
@@ -21570,8 +21936,9 @@ var moveHeadersToQuery = /* @__PURE__ */ __name((request, options = {}) => {
 }, "moveHeadersToQuery");
 
 // src/prepareRequest.ts
+
 var prepareRequest = /* @__PURE__ */ __name((request) => {
-  request = typeof request.clone === "function" ? request.clone() : cloneRequest(request);
+  request = import_protocol_http.HttpRequest.clone(request);
   for (const headerName of Object.keys(request.headers)) {
     if (GENERATED_HEADERS.indexOf(headerName.toLowerCase()) > -1) {
       delete request.headers[headerName];
@@ -25505,6 +25872,8 @@ exports.validate = function (xmlData, options) {
             return getErrorObject('InvalidTag', "Closing tag '"+tagName+"' doesn't have proper closing.", getLineNumberForPosition(xmlData, i));
           } else if (attrStr.trim().length > 0) {
             return getErrorObject('InvalidTag', "Closing tag '"+tagName+"' can't have attributes or invalid starting.", getLineNumberForPosition(xmlData, tagStartPos));
+          } else if (tags.length === 0) {
+            return getErrorObject('InvalidTag', "Closing tag '"+tagName+"' has not been opened.", getLineNumberForPosition(xmlData, tagStartPos));
           } else {
             const otg = tags.pop();
             if (tagName !== otg.tagName) {
@@ -25912,11 +26281,21 @@ Builder.prototype.j2x = function(jObj, level) {
   let attrStr = '';
   let val = '';
   for (let key in jObj) {
+    if(!Object.prototype.hasOwnProperty.call(jObj, key)) continue;
     if (typeof jObj[key] === 'undefined') {
-      // supress undefined node
+      // supress undefined node only if it is not an attribute
+      if (this.isAttribute(key)) {
+        val += '';
+      }
     } else if (jObj[key] === null) {
-      if(key[0] === "?") val += this.indentate(level) + '<' + key + '?' + this.tagEndChar;
-      else val += this.indentate(level) + '<' + key + '/' + this.tagEndChar;
+      // null attribute should be ignored by the attribute list, but should not cause the tag closing
+      if (this.isAttribute(key)) {
+        val += '';
+      } else if (key[0] === '?') {
+        val += this.indentate(level) + '<' + key + '?' + this.tagEndChar;
+      } else {
+        val += this.indentate(level) + '<' + key + '/' + this.tagEndChar;
+      }
       // val += this.indentate(level) + '<' + key + '/' + this.tagEndChar;
     } else if (jObj[key] instanceof Date) {
       val += this.buildTextValNode(jObj[key], key, '', level);
@@ -25938,6 +26317,7 @@ Builder.prototype.j2x = function(jObj, level) {
       //repeated nodes
       const arrLen = jObj[key].length;
       let listTagVal = "";
+      let listTagAttr = "";
       for (let j = 0; j < arrLen; j++) {
         const item = jObj[key][j];
         if (typeof item === 'undefined') {
@@ -25947,17 +26327,27 @@ Builder.prototype.j2x = function(jObj, level) {
           else val += this.indentate(level) + '<' + key + '/' + this.tagEndChar;
           // val += this.indentate(level) + '<' + key + '/' + this.tagEndChar;
         } else if (typeof item === 'object') {
-          if(this.options.oneListGroup ){
-            listTagVal += this.j2x(item, level + 1).val;
+          if(this.options.oneListGroup){
+            const result = this.j2x(item, level + 1);
+            listTagVal += result.val;
+            if (this.options.attributesGroupName && item.hasOwnProperty(this.options.attributesGroupName)) {
+              listTagAttr += result.attrStr
+            }
           }else{
             listTagVal += this.processTextOrObjNode(item, key, level)
           }
         } else {
-          listTagVal += this.buildTextValNode(item, key, '', level);
+          if (this.options.oneListGroup) {
+            let textValue = this.options.tagValueProcessor(key, item);
+            textValue = this.replaceEntitiesValue(textValue);
+            listTagVal += textValue;
+          } else {
+            listTagVal += this.buildTextValNode(item, key, '', level);
+          }
         }
       }
       if(this.options.oneListGroup){
-        listTagVal = this.buildObjectNode(listTagVal, key, '', level);
+        listTagVal = this.buildObjectNode(listTagVal, key, listTagAttr, level);
       }
       val += listTagVal;
     } else {
@@ -26009,7 +26399,8 @@ Builder.prototype.buildObjectNode = function(val, key, attrStr, level) {
       tagEndExp = "";
     }
   
-    if (attrStr && val.indexOf('<') === -1) {
+    // attrStr is an empty string in case the attribute came as undefined or null
+    if ((attrStr || attrStr === '') && val.indexOf('<') === -1) {
       return ( this.indentate(level) + '<' +  key + attrStr + piClosingChar + '>' + val + tagEndExp );
     } else if (this.options.commentPropName !== false && key === this.options.commentPropName && piClosingChar.length === 0) {
       return this.indentate(level) + `<!--${val}-->` + this.newLine;
@@ -26082,7 +26473,7 @@ function indentate(level) {
 }
 
 function isAttribute(name /*, options*/) {
-  if (name.startsWith(this.options.attributeNamePrefix)) {
+  if (name.startsWith(this.options.attributeNamePrefix) && name !== this.options.textNodeName) {
     return name.substr(this.attrPrefixLen);
   } else {
     return false;
@@ -26120,6 +26511,8 @@ function arrToStr(arr, options, jPath, indentation) {
     for (let i = 0; i < arr.length; i++) {
         const tagObj = arr[i];
         const tagName = propName(tagObj);
+        if(tagName === undefined) continue;
+
         let newJPath = "";
         if (jPath.length === 0) newJPath = tagName
         else newJPath = `${jPath}.${tagName}`;
@@ -26189,6 +26582,7 @@ function propName(obj) {
     const keys = Object.keys(obj);
     for (let i = 0; i < keys.length; i++) {
         const key = keys[i];
+        if(!obj.hasOwnProperty(key)) continue;
         if (key !== ":@") return key;
     }
 }
@@ -26197,6 +26591,7 @@ function attr_to_str(attrMap, options) {
     let attrStr = "";
     if (attrMap && !options.ignoreAttributes) {
         for (let attr in attrMap) {
+            if(!attrMap.hasOwnProperty(attr)) continue;
             let attrVal = options.attributeValueProcessor(attr, attrMap[attr]);
             attrVal = replaceEntitiesValue(attrVal, options);
             if (attrVal === true && options.suppressBooleanAttributes) {
@@ -26457,9 +26852,9 @@ const xmlNode = __nccwpck_require__(7462);
 const readDocType = __nccwpck_require__(6072);
 const toNumber = __nccwpck_require__(4526);
 
-const regx =
-  '<((!\\[CDATA\\[([\\s\\S]*?)(]]>))|((NAME:)?(NAME))([^>]*)>|((\\/)(NAME)\\s*>))([^<]*)'
-  .replace(/NAME/g, util.nameRegexp);
+// const regx =
+//   '<((!\\[CDATA\\[([\\s\\S]*?)(]]>))|((NAME:)?(NAME))([^>]*)>|((\\/)(NAME)\\s*>))([^<]*)'
+//   .replace(/NAME/g, util.nameRegexp);
 
 //const tagsRegx = new RegExp("<(\\/?[\\w:\\-\._]+)([^>]*)>(\\s*"+cdataRegx+")*([^<]+)?","g");
 //const tagsRegx = new RegExp("<(\\/?)((\\w*:)?([\\w:\\-\._]+))([^>]*)>([^<]*)("+cdataRegx+"([^<]*))*([^<]+)?","g");
@@ -26491,6 +26886,8 @@ class OrderedObjParser{
       "copyright" : { regex: /&(copy|#169);/g, val: "©" },
       "reg" : { regex: /&(reg|#174);/g, val: "®" },
       "inr" : { regex: /&(inr|#8377);/g, val: "₹" },
+      "num_dec": { regex: /&#([0-9]{1,7});/g, val : (_, str) => String.fromCharCode(Number.parseInt(str, 10)) },
+      "num_hex": { regex: /&#x([0-9a-fA-F]{1,6});/g, val : (_, str) => String.fromCharCode(Number.parseInt(str, 16)) },
     };
     this.addExternalEntities = addExternalEntities;
     this.parseXml = parseXml;
@@ -26716,14 +27113,13 @@ const parseXml = function(xmlData) {
 
         textData = this.saveTextToParentTag(textData, currentNode, jPath);
 
+        let val = this.parseTextData(tagExp, currentNode.tagname, jPath, true, false, true, true);
+        if(val == undefined) val = "";
+
         //cdata should be set even if it is 0 length string
         if(this.options.cdataPropName){
-          // let val = this.parseTextData(tagExp, this.options.cdataPropName, jPath + "." + this.options.cdataPropName, true, false, true);
-          // if(!val) val = "";
           currentNode.add(this.options.cdataPropName, [ { [this.options.textNodeName] : tagExp } ]);
         }else{
-          let val = this.parseTextData(tagExp, currentNode.tagname, jPath, true, false, true);
-          if(val == undefined) val = "";
           currentNode.add(this.options.textNodeName, val);
         }
         
@@ -26731,6 +27127,7 @@ const parseXml = function(xmlData) {
       }else {//Opening tag
         let result = readTagExp(xmlData,i, this.options.removeNSPrefix);
         let tagName= result.tagName;
+        const rawTagName = result.rawTagName;
         let tagExp = result.tagExp;
         let attrExpPresent = result.attrExpPresent;
         let closeIndex = result.closeIndex;
@@ -26756,21 +27153,29 @@ const parseXml = function(xmlData) {
         if(tagName !== xmlObj.tagname){
           jPath += jPath ? "." + tagName : tagName;
         }
-        if (this.isItStopNode(this.options.stopNodes, jPath, tagName)) { //TODO: namespace
+        if (this.isItStopNode(this.options.stopNodes, jPath, tagName)) {
           let tagContent = "";
           //self-closing tag
           if(tagExp.length > 0 && tagExp.lastIndexOf("/") === tagExp.length - 1){
+            if(tagName[tagName.length - 1] === "/"){ //remove trailing '/'
+              tagName = tagName.substr(0, tagName.length - 1);
+              jPath = jPath.substr(0, jPath.length - 1);
+              tagExp = tagName;
+            }else{
+              tagExp = tagExp.substr(0, tagExp.length - 1);
+            }
             i = result.closeIndex;
           }
           //unpaired tag
           else if(this.options.unpairedTags.indexOf(tagName) !== -1){
+            
             i = result.closeIndex;
           }
           //normal tag
           else{
             //read until closing tag is found
-            const result = this.readStopNodeData(xmlData, tagName, closeIndex + 1);
-            if(!result) throw new Error(`Unexpected end of ${tagName}`);
+            const result = this.readStopNodeData(xmlData, rawTagName, closeIndex + 1);
+            if(!result) throw new Error(`Unexpected end of ${rawTagName}`);
             i = result.i;
             tagContent = result.tagContent;
           }
@@ -26792,6 +27197,7 @@ const parseXml = function(xmlData) {
           if(tagExp.length > 0 && tagExp.lastIndexOf("/") === tagExp.length - 1){
             if(tagName[tagName.length - 1] === "/"){ //remove trailing '/'
               tagName = tagName.substr(0, tagName.length - 1);
+              jPath = jPath.substr(0, jPath.length - 1);
               tagExp = tagName;
             }else{
               tagExp = tagExp.substr(0, tagExp.length - 1);
@@ -26950,10 +27356,11 @@ function readTagExp(xmlData,i, removeNSPrefix, closingChar = ">"){
   let tagName = tagExp;
   let attrExpPresent = true;
   if(separatorIndex !== -1){//separate tag name and attributes expression
-    tagName = tagExp.substr(0, separatorIndex).replace(/\s\s*$/, '');
-    tagExp = tagExp.substr(separatorIndex + 1);
+    tagName = tagExp.substring(0, separatorIndex);
+    tagExp = tagExp.substring(separatorIndex + 1).trimStart();
   }
 
+  const rawTagName = tagName;
   if(removeNSPrefix){
     const colonIndex = tagName.indexOf(":");
     if(colonIndex !== -1){
@@ -26967,6 +27374,7 @@ function readTagExp(xmlData,i, removeNSPrefix, closingChar = ">"){
     tagExp: tagExp,
     closeIndex: closeIndex,
     attrExpPresent: attrExpPresent,
+    rawTagName: rawTagName,
   }
 }
 /**
@@ -51021,6 +51429,182 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
+/***/ 3159:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.generateUnitTests = generateUnitTests;
+exports.runUnitTests = runUnitTests;
+exports.generateTestReport = generateTestReport;
+const fs = __importStar(__nccwpck_require__(7147));
+const path = __importStar(__nccwpck_require__(1017));
+const client_bedrock_runtime_1 = __nccwpck_require__(9687);
+const child_process_1 = __nccwpck_require__(2081);
+async function generateUnitTests(client, modelId, sourceCode) {
+    // Define the prompt to send to
+    const prompt = `
+    Analyze the following TypeScript code and generate unit tests:
+    
+    ${sourceCode}
+    
+    Categorize the methods into:
+    1. Methods that can be tested directly
+    2. Methods that can be tested indirectly
+    3. Methods that are not unit-testable
+    
+    For each testable method, create a unit test. Use Jest as the testing framework.
+    Return the results as a JSON array of test cases, where each test case has the following structure:
+    {
+        "name": "Test name",
+        "type": "direct" | "indirect" | "not-testable",
+        "code": "The actual test code"
+    }
+    
+    Here are a few examples of the expected output format:
+    
+    [
+      {
+        "name": "Test add function with positive numbers",
+        "type": "direct",
+        "code": "test('add function with positive numbers', () => { expect(add(2, 3)).toBe(5); });"
+      },
+      {
+        "name": "Test subtract function with negative result",
+        "type": "direct",
+        "code": "test('subtract function with negative result', () => { expect(subtract(5, 10)).toBe(-5); });"
+      },
+      {
+        "name": "Test multiply function with zero",
+        "type": "direct",
+        "code": "test('multiply function with zero', () => { expect(multiply(7, 0)).toBe(0); });"
+      },
+      {
+        "name": "Test private helper method indirectly",
+        "type": "indirect",
+        "code": "test('private helper method indirectly', () => { const result = publicMethodUsingPrivateHelper(5); expect(result).toBe(10); });"
+      },
+      {
+        "name": "Main function",
+        "type": "not-testable",
+        "code": ""
+      }
+    ]
+    
+    Ensure that your response is a valid JSON array containing objects with the specified structure. Do not include any explanatory text outside of the JSON array.
+    `;
+    console.log('Generating unit tests with prompt length:', prompt.length + sourceCode.length);
+    // exact the same implementation as function invokeModel in index.ts
+    const payload = {
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: 4096,
+        messages: [
+            {
+                role: "user",
+                content: [{
+                        type: "text",
+                        text: prompt,
+                    }],
+            },
+        ],
+    };
+    const command = new client_bedrock_runtime_1.InvokeModelCommand({
+        // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+        modelId: modelId,
+        contentType: "application/json",
+        body: JSON.stringify(payload),
+    });
+    const apiResponse = await client.send(command);
+    const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
+    const responseBody = JSON.parse(decodedResponseBody);
+    const finalResult = responseBody.content[0].text;
+    console.log('Generated unit tests:', finalResult);
+    // Parse the finalResult string into an array of TestCase objects
+    try {
+        const parsedTestCases = JSON.parse(finalResult);
+        if (!Array.isArray(parsedTestCases)) {
+            throw new Error('Parsed result is not an array');
+        }
+        return parsedTestCases;
+    }
+    catch (error) {
+        console.error('Failed to parse AI response into TestCase array:', error);
+        console.log('Raw AI response:', finalResult);
+        return [];
+    }
+}
+async function runUnitTests(testCases) {
+    if (!Array.isArray(testCases) || testCases.length === 0) {
+        console.log('Input test cases', testCases);
+        console.log('No test cases to run');
+        return;
+    }
+    const testDir = path.join(__dirname, '..', 'test');
+    if (!fs.existsSync(testDir)) {
+        fs.mkdirSync(testDir, { recursive: true });
+    }
+    console.log('Writing test cases to:', testDir, testCases);
+    const testFilePath = path.join(testDir, 'generated.test.ts');
+    const testFileContent = testCases
+        .filter(tc => tc.type !== 'not-testable')
+        .map(tc => tc.code)
+        .join('\n\n');
+    fs.writeFileSync(testFilePath, testFileContent);
+    try {
+        // log out the execution result of the test
+        (0, child_process_1.execSync)('npx jest', { stdio: 'inherit' });
+        console.log('Tests passed successfully');
+    }
+    catch (error) {
+        console.error('Error running tests:', error);
+    }
+}
+async function generateTestReport(testCases) {
+    if (!Array.isArray(testCases)) {
+        console.log('Invalid test cases input. Skipping report generation.');
+        return;
+    }
+    const report = {
+        totalTests: testCases.length,
+        directTests: testCases.filter(tc => tc.type === 'direct').length,
+        indirectTests: testCases.filter(tc => tc.type === 'indirect').length,
+        notTestable: testCases.filter(tc => tc.type === 'not-testable').length,
+    };
+    const reportDir = path.join(__dirname, '..', 'reports');
+    if (!fs.existsSync(reportDir)) {
+        fs.mkdirSync(reportDir, { recursive: true });
+    }
+    const reportPath = path.join(reportDir, 'report.json');
+    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+}
+
+
+/***/ }),
+
 /***/ 9491:
 /***/ ((module) => {
 
@@ -52898,7 +53482,7 @@ module.exports = parseParams
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse('{"name":"@aws-sdk/client-bedrock-runtime","description":"AWS SDK for JavaScript Bedrock Runtime Client for Node.js, Browser and React Native","version":"3.616.0","scripts":{"build":"concurrently \'yarn:build:cjs\' \'yarn:build:es\' \'yarn:build:types\'","build:cjs":"node ../../scripts/compilation/inline client-bedrock-runtime","build:es":"tsc -p tsconfig.es.json","build:include:deps":"lerna run --scope $npm_package_name --include-dependencies build","build:types":"tsc -p tsconfig.types.json","build:types:downlevel":"downlevel-dts dist-types dist-types/ts3.4","clean":"rimraf ./dist-* && rimraf *.tsbuildinfo","extract:docs":"api-extractor run --local","generate:client":"node ../../scripts/generate-clients/single-service --solo bedrock-runtime"},"main":"./dist-cjs/index.js","types":"./dist-types/index.d.ts","module":"./dist-es/index.js","sideEffects":false,"dependencies":{"@aws-crypto/sha256-browser":"5.2.0","@aws-crypto/sha256-js":"5.2.0","@aws-sdk/client-sso-oidc":"3.616.0","@aws-sdk/client-sts":"3.616.0","@aws-sdk/core":"3.616.0","@aws-sdk/credential-provider-node":"3.616.0","@aws-sdk/middleware-host-header":"3.616.0","@aws-sdk/middleware-logger":"3.609.0","@aws-sdk/middleware-recursion-detection":"3.616.0","@aws-sdk/middleware-user-agent":"3.616.0","@aws-sdk/region-config-resolver":"3.614.0","@aws-sdk/types":"3.609.0","@aws-sdk/util-endpoints":"3.614.0","@aws-sdk/util-user-agent-browser":"3.609.0","@aws-sdk/util-user-agent-node":"3.614.0","@smithy/config-resolver":"^3.0.5","@smithy/core":"^2.2.7","@smithy/eventstream-serde-browser":"^3.0.4","@smithy/eventstream-serde-config-resolver":"^3.0.3","@smithy/eventstream-serde-node":"^3.0.4","@smithy/fetch-http-handler":"^3.2.2","@smithy/hash-node":"^3.0.3","@smithy/invalid-dependency":"^3.0.3","@smithy/middleware-content-length":"^3.0.4","@smithy/middleware-endpoint":"^3.0.5","@smithy/middleware-retry":"^3.0.10","@smithy/middleware-serde":"^3.0.3","@smithy/middleware-stack":"^3.0.3","@smithy/node-config-provider":"^3.1.4","@smithy/node-http-handler":"^3.1.3","@smithy/protocol-http":"^4.0.4","@smithy/smithy-client":"^3.1.8","@smithy/types":"^3.3.0","@smithy/url-parser":"^3.0.3","@smithy/util-base64":"^3.0.0","@smithy/util-body-length-browser":"^3.0.0","@smithy/util-body-length-node":"^3.0.0","@smithy/util-defaults-mode-browser":"^3.0.10","@smithy/util-defaults-mode-node":"^3.0.10","@smithy/util-endpoints":"^2.0.5","@smithy/util-middleware":"^3.0.3","@smithy/util-retry":"^3.0.3","@smithy/util-stream":"^3.1.0","@smithy/util-utf8":"^3.0.0","tslib":"^2.6.2"},"devDependencies":{"@tsconfig/node16":"16.1.3","@types/node":"^16.18.96","concurrently":"7.0.0","downlevel-dts":"0.10.1","rimraf":"3.0.2","typescript":"~4.9.5"},"engines":{"node":">=16.0.0"},"typesVersions":{"<4.0":{"dist-types/*":["dist-types/ts3.4/*"]}},"files":["dist-*/**"],"author":{"name":"AWS SDK for JavaScript Team","url":"https://aws.amazon.com/javascript/"},"license":"Apache-2.0","browser":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.browser"},"react-native":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.native"},"homepage":"https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-bedrock-runtime","repository":{"type":"git","url":"https://github.com/aws/aws-sdk-js-v3.git","directory":"clients/client-bedrock-runtime"}}');
+module.exports = JSON.parse('{"name":"@aws-sdk/client-bedrock-runtime","description":"AWS SDK for JavaScript Bedrock Runtime Client for Node.js, Browser and React Native","version":"3.621.0","scripts":{"build":"concurrently \'yarn:build:cjs\' \'yarn:build:es\' \'yarn:build:types\'","build:cjs":"node ../../scripts/compilation/inline client-bedrock-runtime","build:es":"tsc -p tsconfig.es.json","build:include:deps":"lerna run --scope $npm_package_name --include-dependencies build","build:types":"tsc -p tsconfig.types.json","build:types:downlevel":"downlevel-dts dist-types dist-types/ts3.4","clean":"rimraf ./dist-* && rimraf *.tsbuildinfo","extract:docs":"api-extractor run --local","generate:client":"node ../../scripts/generate-clients/single-service --solo bedrock-runtime"},"main":"./dist-cjs/index.js","types":"./dist-types/index.d.ts","module":"./dist-es/index.js","sideEffects":false,"dependencies":{"@aws-crypto/sha256-browser":"5.2.0","@aws-crypto/sha256-js":"5.2.0","@aws-sdk/client-sso-oidc":"3.621.0","@aws-sdk/client-sts":"3.621.0","@aws-sdk/core":"3.621.0","@aws-sdk/credential-provider-node":"3.621.0","@aws-sdk/middleware-host-header":"3.620.0","@aws-sdk/middleware-logger":"3.609.0","@aws-sdk/middleware-recursion-detection":"3.620.0","@aws-sdk/middleware-user-agent":"3.620.0","@aws-sdk/region-config-resolver":"3.614.0","@aws-sdk/types":"3.609.0","@aws-sdk/util-endpoints":"3.614.0","@aws-sdk/util-user-agent-browser":"3.609.0","@aws-sdk/util-user-agent-node":"3.614.0","@smithy/config-resolver":"^3.0.5","@smithy/core":"^2.3.1","@smithy/eventstream-serde-browser":"^3.0.5","@smithy/eventstream-serde-config-resolver":"^3.0.3","@smithy/eventstream-serde-node":"^3.0.4","@smithy/fetch-http-handler":"^3.2.4","@smithy/hash-node":"^3.0.3","@smithy/invalid-dependency":"^3.0.3","@smithy/middleware-content-length":"^3.0.5","@smithy/middleware-endpoint":"^3.1.0","@smithy/middleware-retry":"^3.0.13","@smithy/middleware-serde":"^3.0.3","@smithy/middleware-stack":"^3.0.3","@smithy/node-config-provider":"^3.1.4","@smithy/node-http-handler":"^3.1.4","@smithy/protocol-http":"^4.1.0","@smithy/smithy-client":"^3.1.11","@smithy/types":"^3.3.0","@smithy/url-parser":"^3.0.3","@smithy/util-base64":"^3.0.0","@smithy/util-body-length-browser":"^3.0.0","@smithy/util-body-length-node":"^3.0.0","@smithy/util-defaults-mode-browser":"^3.0.13","@smithy/util-defaults-mode-node":"^3.0.13","@smithy/util-endpoints":"^2.0.5","@smithy/util-middleware":"^3.0.3","@smithy/util-retry":"^3.0.3","@smithy/util-stream":"^3.1.3","@smithy/util-utf8":"^3.0.0","tslib":"^2.6.2"},"devDependencies":{"@tsconfig/node16":"16.1.3","@types/node":"^16.18.96","concurrently":"7.0.0","downlevel-dts":"0.10.1","rimraf":"3.0.2","typescript":"~4.9.5"},"engines":{"node":">=16.0.0"},"typesVersions":{"<4.0":{"dist-types/*":["dist-types/ts3.4/*"]}},"files":["dist-*/**"],"author":{"name":"AWS SDK for JavaScript Team","url":"https://aws.amazon.com/javascript/"},"license":"Apache-2.0","browser":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.browser"},"react-native":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.native"},"homepage":"https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-bedrock-runtime","repository":{"type":"git","url":"https://github.com/aws/aws-sdk-js-v3.git","directory":"clients/client-bedrock-runtime"}}');
 
 /***/ }),
 
@@ -52906,7 +53490,7 @@ module.exports = JSON.parse('{"name":"@aws-sdk/client-bedrock-runtime","descript
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse('{"name":"@aws-sdk/client-sso-oidc","description":"AWS SDK for JavaScript Sso Oidc Client for Node.js, Browser and React Native","version":"3.616.0","scripts":{"build":"concurrently \'yarn:build:cjs\' \'yarn:build:es\' \'yarn:build:types\'","build:cjs":"node ../../scripts/compilation/inline client-sso-oidc","build:es":"tsc -p tsconfig.es.json","build:include:deps":"lerna run --scope $npm_package_name --include-dependencies build","build:types":"tsc -p tsconfig.types.json","build:types:downlevel":"downlevel-dts dist-types dist-types/ts3.4","clean":"rimraf ./dist-* && rimraf *.tsbuildinfo","extract:docs":"api-extractor run --local","generate:client":"node ../../scripts/generate-clients/single-service --solo sso-oidc"},"main":"./dist-cjs/index.js","types":"./dist-types/index.d.ts","module":"./dist-es/index.js","sideEffects":false,"dependencies":{"@aws-crypto/sha256-browser":"5.2.0","@aws-crypto/sha256-js":"5.2.0","@aws-sdk/core":"3.616.0","@aws-sdk/credential-provider-node":"3.616.0","@aws-sdk/middleware-host-header":"3.616.0","@aws-sdk/middleware-logger":"3.609.0","@aws-sdk/middleware-recursion-detection":"3.616.0","@aws-sdk/middleware-user-agent":"3.616.0","@aws-sdk/region-config-resolver":"3.614.0","@aws-sdk/types":"3.609.0","@aws-sdk/util-endpoints":"3.614.0","@aws-sdk/util-user-agent-browser":"3.609.0","@aws-sdk/util-user-agent-node":"3.614.0","@smithy/config-resolver":"^3.0.5","@smithy/core":"^2.2.7","@smithy/fetch-http-handler":"^3.2.2","@smithy/hash-node":"^3.0.3","@smithy/invalid-dependency":"^3.0.3","@smithy/middleware-content-length":"^3.0.4","@smithy/middleware-endpoint":"^3.0.5","@smithy/middleware-retry":"^3.0.10","@smithy/middleware-serde":"^3.0.3","@smithy/middleware-stack":"^3.0.3","@smithy/node-config-provider":"^3.1.4","@smithy/node-http-handler":"^3.1.3","@smithy/protocol-http":"^4.0.4","@smithy/smithy-client":"^3.1.8","@smithy/types":"^3.3.0","@smithy/url-parser":"^3.0.3","@smithy/util-base64":"^3.0.0","@smithy/util-body-length-browser":"^3.0.0","@smithy/util-body-length-node":"^3.0.0","@smithy/util-defaults-mode-browser":"^3.0.10","@smithy/util-defaults-mode-node":"^3.0.10","@smithy/util-endpoints":"^2.0.5","@smithy/util-middleware":"^3.0.3","@smithy/util-retry":"^3.0.3","@smithy/util-utf8":"^3.0.0","tslib":"^2.6.2"},"devDependencies":{"@tsconfig/node16":"16.1.3","@types/node":"^16.18.96","concurrently":"7.0.0","downlevel-dts":"0.10.1","rimraf":"3.0.2","typescript":"~4.9.5"},"engines":{"node":">=16.0.0"},"typesVersions":{"<4.0":{"dist-types/*":["dist-types/ts3.4/*"]}},"files":["dist-*/**"],"author":{"name":"AWS SDK for JavaScript Team","url":"https://aws.amazon.com/javascript/"},"license":"Apache-2.0","peerDependencies":{"@aws-sdk/client-sts":"^3.616.0"},"browser":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.browser"},"react-native":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.native"},"homepage":"https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-sso-oidc","repository":{"type":"git","url":"https://github.com/aws/aws-sdk-js-v3.git","directory":"clients/client-sso-oidc"}}');
+module.exports = JSON.parse('{"name":"@aws-sdk/client-sso-oidc","description":"AWS SDK for JavaScript Sso Oidc Client for Node.js, Browser and React Native","version":"3.621.0","scripts":{"build":"concurrently \'yarn:build:cjs\' \'yarn:build:es\' \'yarn:build:types\'","build:cjs":"node ../../scripts/compilation/inline client-sso-oidc","build:es":"tsc -p tsconfig.es.json","build:include:deps":"lerna run --scope $npm_package_name --include-dependencies build","build:types":"tsc -p tsconfig.types.json","build:types:downlevel":"downlevel-dts dist-types dist-types/ts3.4","clean":"rimraf ./dist-* && rimraf *.tsbuildinfo","extract:docs":"api-extractor run --local","generate:client":"node ../../scripts/generate-clients/single-service --solo sso-oidc"},"main":"./dist-cjs/index.js","types":"./dist-types/index.d.ts","module":"./dist-es/index.js","sideEffects":false,"dependencies":{"@aws-crypto/sha256-browser":"5.2.0","@aws-crypto/sha256-js":"5.2.0","@aws-sdk/core":"3.621.0","@aws-sdk/credential-provider-node":"3.621.0","@aws-sdk/middleware-host-header":"3.620.0","@aws-sdk/middleware-logger":"3.609.0","@aws-sdk/middleware-recursion-detection":"3.620.0","@aws-sdk/middleware-user-agent":"3.620.0","@aws-sdk/region-config-resolver":"3.614.0","@aws-sdk/types":"3.609.0","@aws-sdk/util-endpoints":"3.614.0","@aws-sdk/util-user-agent-browser":"3.609.0","@aws-sdk/util-user-agent-node":"3.614.0","@smithy/config-resolver":"^3.0.5","@smithy/core":"^2.3.1","@smithy/fetch-http-handler":"^3.2.4","@smithy/hash-node":"^3.0.3","@smithy/invalid-dependency":"^3.0.3","@smithy/middleware-content-length":"^3.0.5","@smithy/middleware-endpoint":"^3.1.0","@smithy/middleware-retry":"^3.0.13","@smithy/middleware-serde":"^3.0.3","@smithy/middleware-stack":"^3.0.3","@smithy/node-config-provider":"^3.1.4","@smithy/node-http-handler":"^3.1.4","@smithy/protocol-http":"^4.1.0","@smithy/smithy-client":"^3.1.11","@smithy/types":"^3.3.0","@smithy/url-parser":"^3.0.3","@smithy/util-base64":"^3.0.0","@smithy/util-body-length-browser":"^3.0.0","@smithy/util-body-length-node":"^3.0.0","@smithy/util-defaults-mode-browser":"^3.0.13","@smithy/util-defaults-mode-node":"^3.0.13","@smithy/util-endpoints":"^2.0.5","@smithy/util-middleware":"^3.0.3","@smithy/util-retry":"^3.0.3","@smithy/util-utf8":"^3.0.0","tslib":"^2.6.2"},"devDependencies":{"@tsconfig/node16":"16.1.3","@types/node":"^16.18.96","concurrently":"7.0.0","downlevel-dts":"0.10.1","rimraf":"3.0.2","typescript":"~4.9.5"},"engines":{"node":">=16.0.0"},"typesVersions":{"<4.0":{"dist-types/*":["dist-types/ts3.4/*"]}},"files":["dist-*/**"],"author":{"name":"AWS SDK for JavaScript Team","url":"https://aws.amazon.com/javascript/"},"license":"Apache-2.0","peerDependencies":{"@aws-sdk/client-sts":"^3.621.0"},"browser":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.browser"},"react-native":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.native"},"homepage":"https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-sso-oidc","repository":{"type":"git","url":"https://github.com/aws/aws-sdk-js-v3.git","directory":"clients/client-sso-oidc"}}');
 
 /***/ }),
 
@@ -52914,7 +53498,7 @@ module.exports = JSON.parse('{"name":"@aws-sdk/client-sso-oidc","description":"A
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse('{"name":"@aws-sdk/client-sso","description":"AWS SDK for JavaScript Sso Client for Node.js, Browser and React Native","version":"3.616.0","scripts":{"build":"concurrently \'yarn:build:cjs\' \'yarn:build:es\' \'yarn:build:types\'","build:cjs":"node ../../scripts/compilation/inline client-sso","build:es":"tsc -p tsconfig.es.json","build:include:deps":"lerna run --scope $npm_package_name --include-dependencies build","build:types":"tsc -p tsconfig.types.json","build:types:downlevel":"downlevel-dts dist-types dist-types/ts3.4","clean":"rimraf ./dist-* && rimraf *.tsbuildinfo","extract:docs":"api-extractor run --local","generate:client":"node ../../scripts/generate-clients/single-service --solo sso"},"main":"./dist-cjs/index.js","types":"./dist-types/index.d.ts","module":"./dist-es/index.js","sideEffects":false,"dependencies":{"@aws-crypto/sha256-browser":"5.2.0","@aws-crypto/sha256-js":"5.2.0","@aws-sdk/core":"3.616.0","@aws-sdk/middleware-host-header":"3.616.0","@aws-sdk/middleware-logger":"3.609.0","@aws-sdk/middleware-recursion-detection":"3.616.0","@aws-sdk/middleware-user-agent":"3.616.0","@aws-sdk/region-config-resolver":"3.614.0","@aws-sdk/types":"3.609.0","@aws-sdk/util-endpoints":"3.614.0","@aws-sdk/util-user-agent-browser":"3.609.0","@aws-sdk/util-user-agent-node":"3.614.0","@smithy/config-resolver":"^3.0.5","@smithy/core":"^2.2.7","@smithy/fetch-http-handler":"^3.2.2","@smithy/hash-node":"^3.0.3","@smithy/invalid-dependency":"^3.0.3","@smithy/middleware-content-length":"^3.0.4","@smithy/middleware-endpoint":"^3.0.5","@smithy/middleware-retry":"^3.0.10","@smithy/middleware-serde":"^3.0.3","@smithy/middleware-stack":"^3.0.3","@smithy/node-config-provider":"^3.1.4","@smithy/node-http-handler":"^3.1.3","@smithy/protocol-http":"^4.0.4","@smithy/smithy-client":"^3.1.8","@smithy/types":"^3.3.0","@smithy/url-parser":"^3.0.3","@smithy/util-base64":"^3.0.0","@smithy/util-body-length-browser":"^3.0.0","@smithy/util-body-length-node":"^3.0.0","@smithy/util-defaults-mode-browser":"^3.0.10","@smithy/util-defaults-mode-node":"^3.0.10","@smithy/util-endpoints":"^2.0.5","@smithy/util-middleware":"^3.0.3","@smithy/util-retry":"^3.0.3","@smithy/util-utf8":"^3.0.0","tslib":"^2.6.2"},"devDependencies":{"@tsconfig/node16":"16.1.3","@types/node":"^16.18.96","concurrently":"7.0.0","downlevel-dts":"0.10.1","rimraf":"3.0.2","typescript":"~4.9.5"},"engines":{"node":">=16.0.0"},"typesVersions":{"<4.0":{"dist-types/*":["dist-types/ts3.4/*"]}},"files":["dist-*/**"],"author":{"name":"AWS SDK for JavaScript Team","url":"https://aws.amazon.com/javascript/"},"license":"Apache-2.0","browser":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.browser"},"react-native":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.native"},"homepage":"https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-sso","repository":{"type":"git","url":"https://github.com/aws/aws-sdk-js-v3.git","directory":"clients/client-sso"}}');
+module.exports = JSON.parse('{"name":"@aws-sdk/client-sso","description":"AWS SDK for JavaScript Sso Client for Node.js, Browser and React Native","version":"3.621.0","scripts":{"build":"concurrently \'yarn:build:cjs\' \'yarn:build:es\' \'yarn:build:types\'","build:cjs":"node ../../scripts/compilation/inline client-sso","build:es":"tsc -p tsconfig.es.json","build:include:deps":"lerna run --scope $npm_package_name --include-dependencies build","build:types":"tsc -p tsconfig.types.json","build:types:downlevel":"downlevel-dts dist-types dist-types/ts3.4","clean":"rimraf ./dist-* && rimraf *.tsbuildinfo","extract:docs":"api-extractor run --local","generate:client":"node ../../scripts/generate-clients/single-service --solo sso"},"main":"./dist-cjs/index.js","types":"./dist-types/index.d.ts","module":"./dist-es/index.js","sideEffects":false,"dependencies":{"@aws-crypto/sha256-browser":"5.2.0","@aws-crypto/sha256-js":"5.2.0","@aws-sdk/core":"3.621.0","@aws-sdk/middleware-host-header":"3.620.0","@aws-sdk/middleware-logger":"3.609.0","@aws-sdk/middleware-recursion-detection":"3.620.0","@aws-sdk/middleware-user-agent":"3.620.0","@aws-sdk/region-config-resolver":"3.614.0","@aws-sdk/types":"3.609.0","@aws-sdk/util-endpoints":"3.614.0","@aws-sdk/util-user-agent-browser":"3.609.0","@aws-sdk/util-user-agent-node":"3.614.0","@smithy/config-resolver":"^3.0.5","@smithy/core":"^2.3.1","@smithy/fetch-http-handler":"^3.2.4","@smithy/hash-node":"^3.0.3","@smithy/invalid-dependency":"^3.0.3","@smithy/middleware-content-length":"^3.0.5","@smithy/middleware-endpoint":"^3.1.0","@smithy/middleware-retry":"^3.0.13","@smithy/middleware-serde":"^3.0.3","@smithy/middleware-stack":"^3.0.3","@smithy/node-config-provider":"^3.1.4","@smithy/node-http-handler":"^3.1.4","@smithy/protocol-http":"^4.1.0","@smithy/smithy-client":"^3.1.11","@smithy/types":"^3.3.0","@smithy/url-parser":"^3.0.3","@smithy/util-base64":"^3.0.0","@smithy/util-body-length-browser":"^3.0.0","@smithy/util-body-length-node":"^3.0.0","@smithy/util-defaults-mode-browser":"^3.0.13","@smithy/util-defaults-mode-node":"^3.0.13","@smithy/util-endpoints":"^2.0.5","@smithy/util-middleware":"^3.0.3","@smithy/util-retry":"^3.0.3","@smithy/util-utf8":"^3.0.0","tslib":"^2.6.2"},"devDependencies":{"@tsconfig/node16":"16.1.3","@types/node":"^16.18.96","concurrently":"7.0.0","downlevel-dts":"0.10.1","rimraf":"3.0.2","typescript":"~4.9.5"},"engines":{"node":">=16.0.0"},"typesVersions":{"<4.0":{"dist-types/*":["dist-types/ts3.4/*"]}},"files":["dist-*/**"],"author":{"name":"AWS SDK for JavaScript Team","url":"https://aws.amazon.com/javascript/"},"license":"Apache-2.0","browser":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.browser"},"react-native":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.native"},"homepage":"https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-sso","repository":{"type":"git","url":"https://github.com/aws/aws-sdk-js-v3.git","directory":"clients/client-sso"}}');
 
 /***/ }),
 
@@ -52922,7 +53506,7 @@ module.exports = JSON.parse('{"name":"@aws-sdk/client-sso","description":"AWS SD
 /***/ ((module) => {
 
 "use strict";
-module.exports = JSON.parse('{"name":"@aws-sdk/client-sts","description":"AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native","version":"3.616.0","scripts":{"build":"concurrently \'yarn:build:cjs\' \'yarn:build:es\' \'yarn:build:types\'","build:cjs":"node ../../scripts/compilation/inline client-sts","build:es":"tsc -p tsconfig.es.json","build:include:deps":"lerna run --scope $npm_package_name --include-dependencies build","build:types":"rimraf ./dist-types tsconfig.types.tsbuildinfo && tsc -p tsconfig.types.json","build:types:downlevel":"downlevel-dts dist-types dist-types/ts3.4","clean":"rimraf ./dist-* && rimraf *.tsbuildinfo","extract:docs":"api-extractor run --local","generate:client":"node ../../scripts/generate-clients/single-service --solo sts","test":"yarn test:unit","test:unit":"jest"},"main":"./dist-cjs/index.js","types":"./dist-types/index.d.ts","module":"./dist-es/index.js","sideEffects":false,"dependencies":{"@aws-crypto/sha256-browser":"5.2.0","@aws-crypto/sha256-js":"5.2.0","@aws-sdk/client-sso-oidc":"3.616.0","@aws-sdk/core":"3.616.0","@aws-sdk/credential-provider-node":"3.616.0","@aws-sdk/middleware-host-header":"3.616.0","@aws-sdk/middleware-logger":"3.609.0","@aws-sdk/middleware-recursion-detection":"3.616.0","@aws-sdk/middleware-user-agent":"3.616.0","@aws-sdk/region-config-resolver":"3.614.0","@aws-sdk/types":"3.609.0","@aws-sdk/util-endpoints":"3.614.0","@aws-sdk/util-user-agent-browser":"3.609.0","@aws-sdk/util-user-agent-node":"3.614.0","@smithy/config-resolver":"^3.0.5","@smithy/core":"^2.2.7","@smithy/fetch-http-handler":"^3.2.2","@smithy/hash-node":"^3.0.3","@smithy/invalid-dependency":"^3.0.3","@smithy/middleware-content-length":"^3.0.4","@smithy/middleware-endpoint":"^3.0.5","@smithy/middleware-retry":"^3.0.10","@smithy/middleware-serde":"^3.0.3","@smithy/middleware-stack":"^3.0.3","@smithy/node-config-provider":"^3.1.4","@smithy/node-http-handler":"^3.1.3","@smithy/protocol-http":"^4.0.4","@smithy/smithy-client":"^3.1.8","@smithy/types":"^3.3.0","@smithy/url-parser":"^3.0.3","@smithy/util-base64":"^3.0.0","@smithy/util-body-length-browser":"^3.0.0","@smithy/util-body-length-node":"^3.0.0","@smithy/util-defaults-mode-browser":"^3.0.10","@smithy/util-defaults-mode-node":"^3.0.10","@smithy/util-endpoints":"^2.0.5","@smithy/util-middleware":"^3.0.3","@smithy/util-retry":"^3.0.3","@smithy/util-utf8":"^3.0.0","tslib":"^2.6.2"},"devDependencies":{"@tsconfig/node16":"16.1.3","@types/node":"^16.18.96","concurrently":"7.0.0","downlevel-dts":"0.10.1","rimraf":"3.0.2","typescript":"~4.9.5"},"engines":{"node":">=16.0.0"},"typesVersions":{"<4.0":{"dist-types/*":["dist-types/ts3.4/*"]}},"files":["dist-*/**"],"author":{"name":"AWS SDK for JavaScript Team","url":"https://aws.amazon.com/javascript/"},"license":"Apache-2.0","browser":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.browser"},"react-native":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.native"},"homepage":"https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-sts","repository":{"type":"git","url":"https://github.com/aws/aws-sdk-js-v3.git","directory":"clients/client-sts"}}');
+module.exports = JSON.parse('{"name":"@aws-sdk/client-sts","description":"AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native","version":"3.621.0","scripts":{"build":"concurrently \'yarn:build:cjs\' \'yarn:build:es\' \'yarn:build:types\'","build:cjs":"node ../../scripts/compilation/inline client-sts","build:es":"tsc -p tsconfig.es.json","build:include:deps":"lerna run --scope $npm_package_name --include-dependencies build","build:types":"rimraf ./dist-types tsconfig.types.tsbuildinfo && tsc -p tsconfig.types.json","build:types:downlevel":"downlevel-dts dist-types dist-types/ts3.4","clean":"rimraf ./dist-* && rimraf *.tsbuildinfo","extract:docs":"api-extractor run --local","generate:client":"node ../../scripts/generate-clients/single-service --solo sts","test":"yarn test:unit","test:unit":"jest"},"main":"./dist-cjs/index.js","types":"./dist-types/index.d.ts","module":"./dist-es/index.js","sideEffects":false,"dependencies":{"@aws-crypto/sha256-browser":"5.2.0","@aws-crypto/sha256-js":"5.2.0","@aws-sdk/client-sso-oidc":"3.621.0","@aws-sdk/core":"3.621.0","@aws-sdk/credential-provider-node":"3.621.0","@aws-sdk/middleware-host-header":"3.620.0","@aws-sdk/middleware-logger":"3.609.0","@aws-sdk/middleware-recursion-detection":"3.620.0","@aws-sdk/middleware-user-agent":"3.620.0","@aws-sdk/region-config-resolver":"3.614.0","@aws-sdk/types":"3.609.0","@aws-sdk/util-endpoints":"3.614.0","@aws-sdk/util-user-agent-browser":"3.609.0","@aws-sdk/util-user-agent-node":"3.614.0","@smithy/config-resolver":"^3.0.5","@smithy/core":"^2.3.1","@smithy/fetch-http-handler":"^3.2.4","@smithy/hash-node":"^3.0.3","@smithy/invalid-dependency":"^3.0.3","@smithy/middleware-content-length":"^3.0.5","@smithy/middleware-endpoint":"^3.1.0","@smithy/middleware-retry":"^3.0.13","@smithy/middleware-serde":"^3.0.3","@smithy/middleware-stack":"^3.0.3","@smithy/node-config-provider":"^3.1.4","@smithy/node-http-handler":"^3.1.4","@smithy/protocol-http":"^4.1.0","@smithy/smithy-client":"^3.1.11","@smithy/types":"^3.3.0","@smithy/url-parser":"^3.0.3","@smithy/util-base64":"^3.0.0","@smithy/util-body-length-browser":"^3.0.0","@smithy/util-body-length-node":"^3.0.0","@smithy/util-defaults-mode-browser":"^3.0.13","@smithy/util-defaults-mode-node":"^3.0.13","@smithy/util-endpoints":"^2.0.5","@smithy/util-middleware":"^3.0.3","@smithy/util-retry":"^3.0.3","@smithy/util-utf8":"^3.0.0","tslib":"^2.6.2"},"devDependencies":{"@tsconfig/node16":"16.1.3","@types/node":"^16.18.96","concurrently":"7.0.0","downlevel-dts":"0.10.1","rimraf":"3.0.2","typescript":"~4.9.5"},"engines":{"node":">=16.0.0"},"typesVersions":{"<4.0":{"dist-types/*":["dist-types/ts3.4/*"]}},"files":["dist-*/**"],"author":{"name":"AWS SDK for JavaScript Team","url":"https://aws.amazon.com/javascript/"},"license":"Apache-2.0","browser":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.browser"},"react-native":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.native"},"homepage":"https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-sts","repository":{"type":"git","url":"https://github.com/aws/aws-sdk-js-v3.git","directory":"clients/client-sts"}}');
 
 /***/ })
 
