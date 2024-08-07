@@ -161,7 +161,8 @@ async function generatePRDescription(client: BedrockRuntimeClient, modelId: stri
 
 async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }): Promise<void> {
   const pullRequest = context.payload.pull_request as PullRequest;
-  console.log('Generating unit tests suite for PR #', pullRequest.number);
+  const branchName = pullRequest.head.ref;
+  let testCases: any[] = []; // Declare the testCases variable
 
   // Execute the code_layout.sh script
   const outputFile = 'combined_code_dump.txt';
@@ -184,18 +185,13 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
   // Add the generated unit tests to existing PR
   if (pullRequest) {
     try {
-      const branchName = pullRequest.head.ref;
-      const testCases: any[] = []; // Declare the testCases variable
-
       if (!branchName) {
         throw new Error('Unable to determine the branch name');
       }
-
-      console.log(`Adding unit tests to PR #${pullRequest.number} on branch: ${branchName}`);
+      console.log(`Generating unit tests to PR #${pullRequest.number} on branch: ${branchName}`);
 
       // Generate a summary of the unit tests with the number of test case according to the testCases array
-      const unitTestsSummary = `Generated ${testCases.length} unit tests`;
-
+      // const unitTestsSummary = `Generated ${testCases.length} unit tests`;
       // Update the PR description with the unit tests summary
       // const currentDescription = pullRequest.body || '';
       // const updatedDescription = `${currentDescription}\n\n## Generated Unit Tests\n\n${unitTestsSummary}`;

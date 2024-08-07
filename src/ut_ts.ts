@@ -90,7 +90,6 @@ export async function generateUnitTests(client: BedrockRuntimeClient, modelId: s
     const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
     const responseBody = JSON.parse(decodedResponseBody);
     const finalResult = responseBody.content[0].text;
-    console.log('Generated unit tests:', finalResult);
     // Parse the finalResult string into an array of TestCase objects
     try {
         const parsedTestCases = JSON.parse(finalResult) as TestCase[];
