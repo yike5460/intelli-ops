@@ -169,7 +169,12 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     if (chunks[0] !== undefined) {
         // log the processing phase
         console.log(`Processing chunk 1 of ${chunks.length}`);
-        const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, chunks[0]);
+        testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, chunks[0]);
+        // check if the testCases is empty
+        if (testCases.length === 0) {
+            console.log('No test cases generated. Skipping unit tests execution and report generation.');
+            return;
+        }
         await (0, ut_ts_1.runUnitTests)(testCases);
         await (0, ut_ts_1.generateTestReport)(testCases);
     }

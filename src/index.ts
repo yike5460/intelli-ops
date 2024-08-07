@@ -177,7 +177,12 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
   if (chunks[0] !== undefined) {
     // log the processing phase
     console.log(`Processing chunk 1 of ${chunks.length}`);
-    const testCases = await generateUnitTests(client, modelId, chunks[0]);
+    testCases = await generateUnitTests(client, modelId, chunks[0]);
+    // check if the testCases is empty
+    if (testCases.length === 0) {
+      console.log('No test cases generated. Skipping unit tests execution and report generation.');
+      return;
+    }
     await runUnitTests(testCases);
     await generateTestReport(testCases);
   }
