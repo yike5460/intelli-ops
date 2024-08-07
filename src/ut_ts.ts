@@ -97,6 +97,7 @@ export async function generateUnitTests(client: BedrockRuntimeClient, modelId: s
         if (!Array.isArray(parsedTestCases)) {
             throw new Error('Parsed result is not an array');
         }
+        console.log('generated test cases:', parsedTestCases);
         return parsedTestCases;
     } catch (error) {
         console.error('Failed to parse AI response into TestCase array:', error);
@@ -152,4 +153,7 @@ export async function generateTestReport(testCases: TestCase[]): Promise<void> {
 
     const reportPath = path.join(reportDir, 'report.json');
     fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+
+    // TODO: upload the artifact from the report directory as an artifact named "logs", using actions/upload-artifact@v4
+    console.log('Test report generated:', report);
 }
