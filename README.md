@@ -205,6 +205,15 @@ The [document](https://github.com/aws-actions/configure-aws-credentials) outline
     role-chaining: true
 ```
 
+## Handy commands to release the action
+
+```bash
+version = "0.0.31"
+git tag -a $version -m "Release version $version"
+git push origin $version
+gh release create $version -t "$version" -n ""
+```
+
 Key differences:
 
 1. GitHub's OIDC provider is the recommended method as it uses short-lived credentials and doesn't require storing long-term secrets.

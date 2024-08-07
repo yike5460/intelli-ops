@@ -188,8 +188,6 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
       if (!branchName) {
         throw new Error('Unable to determine the branch name');
       }
-      console.log(`Generating unit tests to PR #${pullRequest.number} on branch: ${branchName}`);
-
       // Generate a summary of the unit tests with the number of test case according to the testCases array
       // const unitTestsSummary = `Generated ${testCases.length} unit tests`;
       // Update the PR description with the unit tests summary
@@ -205,6 +203,7 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
       // Create a new file with the generated unit tests in test folder
       const unitTestsContent = testCases.map(tc => tc.code).join('\n\n');
       const unitTestsFileName = 'test/unit_tests.ts';
+      console.log(`Generating unit tests to PR #${pullRequest.number} on branch: ${branchName} with unit test content: ${unitTestsContent}`);
 
       // Check if the file already exists
       let fileSha: string | undefined;
