@@ -459,6 +459,7 @@ async function generateCodeReviewComment(bedrockClient, modelId, octokit, exclud
         }
     }
     if (reviewComments.length > 0) {
+        console.log('Posting code review comments to the PR with content:', reviewComments);
         await octokit.rest.pulls.createReview({
             ...repo,
             pull_number: pullRequest.number,
