@@ -133,12 +133,25 @@ async function generatePRDescription(client, modelId, octokit) {
         pull_number: pullRequest.number,
     });
     const fileChanges = await Promise.all(files.map(async (file) => {
-        const { data: content } = await octokit.rest.repos.getContent({
-            ...repo,
-            path: file.filename,
-            ref: pullRequest.head.sha,
-        });
-        return `${file.filename}: ${file.status}`;
+        // For removed files, we don't need to fetch the content
+        if (file.status === 'removed') {
+            return `${file.filename}: ${file.status}`;
+        }
+        try {
+            const { data: content } = await octokit.rest.repos.getContent({
+                ...repo,
+                path: file.filename,
+                ref: pullRequest.head.sha,
+            });
+            return `${file.filename}: ${file.status}`;
+        }
+        catch (error) {
+            if (error.status === 404) {
+                console.log(`File ${file.filename} not found in the repository`);
+                return `${file.filename}: not found`;
+            }
+            return `${file.filename}: error`;
+        }
     }));
     const prDescriptionTemplate = pr_generation_prompt.replace('[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]', fileChanges.join('\n'));
     // invoke model to generate complete PR description
@@ -503,10 +516,6 @@ async function run() {
         const pullRequest = github_1.context.payload.pull_request;
         const repo = github_1.context.repo;
         console.log(`Reviewing PR #${pullRequest.number} in ${repo.owner}/${repo.repo}`);
-        const { data: files } = await octokit.rest.pulls.listFiles({
-            ...repo,
-            pull_number: pullRequest.number,
-        });
         // branch to generate PR description
         if (generatePRDesc) {
             await generatePRDescription(bedrockClient, modelId, octokit);
