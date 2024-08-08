@@ -511,10 +511,10 @@ async function run() {
         console.log(`AWS Region: ${awsRegion}`);
         console.log(`Model ID: ${modelId}`);
         console.log(`Excluded files: ${excludeFiles}`);
-        console.log('Code review: ${codeReview}');
+        console.log(`Code review: ${codeReview}`);
         console.log(`Review level: ${reviewLevel}`);
-        console.log(`Generate PR description: ${generatePRDesc ? 'Yes' : 'No'}`);
-        console.log(`Generate unit test suite: ${generateUnitTestSuite ? 'Yes' : 'No'}`);
+        console.log(`Generate PR description: ${generatePRDesc ? 'true' : 'false'}`);
+        console.log(`Generate unit test suite: ${generateUnitTestSuite ? 'true' : 'false'}`);
         if (!githubToken) {
             throw new Error('GitHub token is not set');
         }
@@ -528,15 +528,15 @@ async function run() {
         const repo = github_1.context.repo;
         console.log(`Reviewing PR #${pullRequest.number} in ${repo.owner}/${repo.repo}`);
         // branch to generate PR description
-        if (generatePRDesc) {
+        if (generatePRDesc.toLowerCase() === 'true') {
             await generatePRDescription(bedrockClient, modelId, octokit);
         }
         // branch to generate unit tests suite
-        if (generateUnitTestSuite) {
+        if (generateUnitTestSuite.toLowerCase() === 'true') {
             await generateUnitTestsSuite(bedrockClient, modelId, octokit, repo);
         }
         // branch to generate code review comments
-        if (codeReview === 'true') {
+        if (codeReview.toLowerCase() === 'true') {
             // Wait for a fixed amount of time (e.g., 5 seconds)
             const delayMs = 5000; // 5 seconds
             console.log(`Waiting ${delayMs}ms for GitHub to process the changes...`);
