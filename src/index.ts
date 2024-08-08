@@ -463,6 +463,17 @@ async function generateCodeReviewComment(bedrockClient: BedrockRuntimeClient, mo
   let reviewComments: ReviewComment[] = [];
 
   for (const file of files as PullFile[]) {
+    // The sample contents of file.patch, which contains a unified diff representation of the changes made to a file in a pull request:
+    // diff --git a/file1.txt b/file1.txt
+    // index 7cfc5c8..e69de29 100644
+    // --- a/file1.txt
+    // +++ b/file1.txt
+    // @@ -1,3 +1,2 @@
+    // -This is the original line 1.
+    // -This is the original line 2.
+    // +This is the new line 1.
+    //  This is an unchanged line.
+    // @@ is the hunk header that shows where the changes are and how many lines are changed. In this case, it indicates that the changes start at line 1 of the old file and affect 3 lines, and start at line 1 of the new file and affect 2 lines.
     if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
       console.log(`Reviewing file: ${file.filename}`);
 
@@ -567,6 +578,10 @@ async function run(): Promise<void> {
 
     // branch to generate code review comments
     if (codeReview === 'true') {
+      // Wait for a fixed amount of time (e.g., 5 seconds)
+      const delayMs = 5000; // 5 seconds
+      console.log(`Waiting ${delayMs}ms for GitHub to process the changes...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
       await generateCodeReviewComment(bedrockClient, modelId, octokit, excludePatterns, reviewLevel);
     }
 
