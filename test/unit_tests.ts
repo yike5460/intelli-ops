@@ -1,8 +1,30 @@
-const mockEvent = { body: JSON.stringify({ prompt: 'Hello', parameters: { max_new_tokens: 256, temperature: 0.1 } }) }; const mockContext = {}; const mockResponse = { Body: { read: () => JSON.stringify({ result: 'Hello, world!' }) } }; const mockSMRClient = { invoke_endpoint: jest.fn().mockResolvedValue(mockResponse) }; const mockBoto3 = { client: jest.fn().mockReturnValue(mockSMRClient) }; jest.mock('boto3', () => mockBoto3); const lambdaFunction = require('./notebook/lambda_function'); test('lambda_handler with valid input', async () => { const result = await lambdaFunction.lambda_handler(mockEvent, mockContext); expect(result).toEqual({ statusCode: 200, body: JSON.stringify({ result: 'Hello, world!' }) }); expect(mockSMRClient.invoke_endpoint).toHaveBeenCalledWith({ EndpointName: process.env.SAGEMAKER_ENDPOINT_NAME, Body: JSON.stringify({ inputs: 'Hello', parameters: { max_new_tokens: 256, temperature: 0.1 } }), ContentType: 'application/json' }); });
+jest.mock('aws-sdk', () => ({ client: jest.fn(() => ({ invoke_endpoint: jest.fn(() => ({ Body: { read: jest.fn(() => JSON.stringify({ result: 'mocked response' })) } })) })) }));
 
-const mockEvent = { body: JSON.stringify({ prompt: 'Hello' }) }; const mockContext = {}; const mockResponse = { Body: { read: () => JSON.stringify({ result: 'Hello, world!' }) } }; const mockSMRClient = { invoke_endpoint: jest.fn().mockResolvedValue(mockResponse) }; const mockBoto3 = { client: jest.fn().mockReturnValue(mockSMRClient) }; jest.mock('boto3', () => mockBoto3); const lambdaFunction = require('./notebook/lambda_function'); test('lambda_handler with missing parameters', async () => { const result = await lambdaFunction.lambda_handler(mockEvent, mockContext); expect(result).toEqual({ statusCode: 200, body: JSON.stringify({ result: 'Hello, world!' }) }); expect(mockSMRClient.invoke_endpoint).toHaveBeenCalledWith({ EndpointName: process.env.SAGEMAKER_ENDPOINT_NAME, Body: JSON.stringify({ inputs: 'Hello', parameters: { max_new_tokens: 256, temperature: 0.1 } }), ContentType: 'application/json' }); });
+const event = { body: JSON.stringify({ prompt: 'test prompt', parameters: { max_new_tokens: 256, temperature: 0.1 } }) };
+const context = {};
 
-const mockEvent = { body: 'invalid json' }; const mockContext = {}; const lambdaFunction = require('./notebook/lambda_function'); test('lambda_handler with invalid input', async () => { const result = await lambdaFunction.lambda_handler(mockEvent, mockContext); expect(result).toEqual({ statusCode: 400, body: JSON.stringify({ error: 'Invalid input' }) }); });
+test('lambda_handler with valid input', async () => {
+  const response = await lambda_handler(event, context);
+  expect(response).toEqual({ statusCode: 200, body: JSON.stringify({ result: 'mocked response' }) });
+});
 
+jest.mock('aws-sdk', () => ({ client: jest.fn(() => ({ invoke_endpoint: jest.fn(() => ({ Body: { read: jest.fn(() => JSON.stringify({ result: 'mocked response' })) } })) })) }));
 
+const event = { body: JSON.stringify({ parameters: { max_new_tokens: 256, temperature: 0.1 } }) };
+const context = {};
+
+test('lambda_handler with missing prompt', async () => {
+  const response = await lambda_handler(event, context);
+  expect(response).toEqual({ statusCode: 200, body: JSON.stringify({ result: 'mocked response' }) });
+});
+
+jest.mock('aws-sdk', () => ({ client: jest.fn(() => ({ invoke_endpoint: jest.fn(() => ({ Body: { read: jest.fn(() => JSON.stringify({ result: 'mocked response' })) } })) })) }));
+
+const event = { body: 'invalid input' };
+const context = {};
+
+test('lambda_handler with invalid input', async () => {
+  const response = await lambda_handler(event, context);
+  expect(response).toEqual({ statusCode: 400, body: JSON.stringify({ error: 'Invalid input' }) });
+});
 
