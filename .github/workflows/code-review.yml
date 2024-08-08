@@ -65,6 +65,6 @@ jobs:
         review-level: 'concise'
         code-review: 'true'
         generate-pr-description: 'true'
-        generate-unit-test-suite: 'false'
+        generate-unit-test-suite: 'true'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
