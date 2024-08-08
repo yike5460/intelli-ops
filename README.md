@@ -115,7 +115,9 @@ To configure GitHub Actions to assume the role you just created, you will need t
 | `model-id` | ID of the model to use for code reviews | `anthropic.claude-3-sonnet-20240229-v1:0` | Yes |
 | `exclude-files` | Comma-separated list of file patterns to exclude | N/A | No |
 | `review-level` | Level of detail for reviews ('detailed' or 'concise') | `'concise'` | No |
+| `code-review` | Whether to perform code reviews | `'false'` | No |
 | `generate-pr-description` | Whether to generate PR descriptions | `'false'` | No |
+| `generate-unit-test-suite` | Whether to generate unit test suite | `'false'` | No |
 
 ## Example
 
@@ -203,6 +205,15 @@ The [document](https://github.com/aws-actions/configure-aws-credentials) outline
     role-to-assume: arn:aws:iam::123456789100:role/my-github-actions-role
     aws-region: us-east-1
     role-chaining: true
+```
+
+## Handy commands to release the action
+
+```bash
+version = "0.0.31"
+git tag -a $version -m "Release version $version"
+git push origin $version
+gh release create $version -t "$version" -n ""
 ```
 
 Key differences:

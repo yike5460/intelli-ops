@@ -55,7 +55,7 @@ jobs:
         aws-region: us-east-1
 
     - name: Code review using AWS Bedrock
-      uses: yike5460/intelli-ops@v0.0.26
+      uses: yike5460/intelli-ops@v0.0.39
       with:
         # Automatic Provision: The GITHUB_TOKEN is automatically created and provided by GitHub for each workflow run. You don't need to manually create or store this token as a secret.
         github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -63,7 +63,8 @@ jobs:
         model-id: anthropic.claude-3-sonnet-20240229-v1:0
         exclude-files: '*.md,*.json'
         review-level: 'concise'
+        code-review: 'true'
         generate-pr-description: 'true'
-        generate-unit-test-suite: 'true'
+        generate-unit-test-suite: 'false'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -122,25 +122,59 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 - [ ] Any dependent changes have been merged and published in downstream modules
 `;
 
-async function generatePRDescription(files: PullFile[], octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }, pullNumber: number): Promise<string> {
+async function generatePRDescription(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>): Promise<void> {
+
   const pullRequest = context.payload.pull_request as PullRequest;
+  const repo = context.repo;
+
+  // fetch the list of files changed in the PR each time since the file can be changed in operation like unit test generation, code review, etc.
+  const { data: files } = await octokit.rest.pulls.listFiles({
+    ...repo,
+    pull_number: pullRequest.number,
+  });
+
   const fileChanges = await Promise.all(files.map(async (file) => {
-    const { data: content } = await octokit.rest.repos.getContent({
-      ...repo,
-      path: file.filename,
-      ref: pullRequest.head.sha,
-    });
-    return `${file.filename}: ${file.status}`;
+    // For removed files, we don't need to fetch the content
+    if (file.status === 'removed') {
+      return `${file.filename}: ${file.status}`;
+    }
+    try {
+      const { data: content } = await octokit.rest.repos.getContent({
+        ...repo,
+        path: file.filename,
+        ref: pullRequest.head.sha,
+      });
+      return `${file.filename}: ${file.status}`;
+    } catch (error) {
+      if ((error as any).status === 404) {
+        console.log(`File ${file.filename} not found in the repository`);
+        return `${file.filename}: not found`;
+      }
+      return `${file.filename}: error`;
+    }
   }));
 
-  const description = pr_generation_prompt.replace('[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]', fileChanges.join('\n'));
+  const prDescriptionTemplate = pr_generation_prompt.replace('[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]', fileChanges.join('\n'));
 
-  return description;
+  // invoke model to generate complete PR description
+  const payloadInput = prDescriptionTemplate;
+  const prDescription = await invokeModel(client, modelId, payloadInput);
+
+  // append fixed template content to the generated PR description
+  const prDescriptionWithTemplate = prDescription + fixed_pr_generation_template;
+
+  await octokit.rest.pulls.update({
+    ...repo,
+    pull_number: pullRequest.number,
+    body: prDescriptionWithTemplate,
+  });
+  console.log('PR description updated successfully.');
 }
 
 async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }): Promise<void> {
   const pullRequest = context.payload.pull_request as PullRequest;
-  console.log('Generating unit tests suite for PR #', pullRequest.number);
+  const branchName = pullRequest.head.ref;
+  let testCases: any[] = []; // Declare the testCases variable
 
   // Execute the code_layout.sh script
   const outputFile = 'combined_code_dump.txt';
@@ -155,7 +189,12 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
   if (chunks[0] !== undefined) {
     // log the processing phase
     console.log(`Processing chunk 1 of ${chunks.length}`);
-    const testCases = await generateUnitTests(client, modelId, chunks[0]);
+    testCases = await generateUnitTests(client, modelId, chunks[0]);
+    // check if the testCases is empty
+    if (testCases.length === 0) {
+      console.log('No test cases generated. Skipping unit tests execution and report generation.');
+      return;
+    }
     await runUnitTests(testCases);
     await generateTestReport(testCases);
   }
@@ -163,18 +202,11 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
   // Add the generated unit tests to existing PR
   if (pullRequest) {
     try {
-      const branchName = pullRequest.head.ref;
-      const testCases: any[] = []; // Declare the testCases variable
-
       if (!branchName) {
         throw new Error('Unable to determine the branch name');
       }
-
-      console.log(`Adding unit tests to PR #${pullRequest.number} on branch: ${branchName}`);
-
       // Generate a summary of the unit tests with the number of test case according to the testCases array
-      const unitTestsSummary = `Generated ${testCases.length} unit tests`;
-
+      // const unitTestsSummary = `Generated ${testCases.length} unit tests`;
       // Update the PR description with the unit tests summary
       // const currentDescription = pullRequest.body || '';
       // const updatedDescription = `${currentDescription}\n\n## Generated Unit Tests\n\n${unitTestsSummary}`;
@@ -185,9 +217,26 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
       // });
       // console.log('PR description updated with unit tests summary.');
 
-      // Create a new file with the generated unit tests
+      // Create a new file with the generated unit tests in test folder
       const unitTestsContent = testCases.map(tc => tc.code).join('\n\n');
-      const unitTestsFileName = 'generated_unit_tests.py';  // or .ts, depending on your project
+      const unitTestsFileName = 'test/unit_tests.ts';
+      console.log(`Generating unit tests to PR #${pullRequest.number} on branch: ${branchName} with unit test content: ${unitTestsContent}`);
+
+      // Check if the file already exists
+      let fileSha: string | undefined;
+      try {
+        const { data: existingFile } = await octokit.rest.repos.getContent({
+          ...repo,
+          path: unitTestsFileName,
+          ref: branchName,
+        });
+        if ('sha' in existingFile) {
+          fileSha = existingFile.sha;
+        }
+      } catch (error) {
+        // it's fine if the file does not exist
+        console.log(`File ${unitTestsFileName} does not exist in the repository`);
+      }
 
       await octokit.rest.repos.createOrUpdateFileContents({
         ...repo,
@@ -195,6 +244,7 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
         message: 'Add generated unit tests',
         content: Buffer.from(unitTestsContent).toString('base64'),
         branch: branchName,
+        sha: fileSha, // Include the sha if the file exists, undefined otherwise
       });
       console.log(`Unit tests added to PR as ${unitTestsFileName}`);
 
@@ -257,7 +307,8 @@ Provide feedback on these aspects, categorizing your comments as follows:
 </rules>
 
 <output_format>
-Provide your review in the following format. Limit your response to 200 words. Note if changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't include any further details in categories below.
+If changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't output any further details in categories below.
+Otherwise provide your review in the following format. Limit your response to 200 words.
 
 Summary:
 [Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below]
@@ -319,7 +370,8 @@ Provide feedback on these aspects, categorizing your comments as follows:
 </rules>
 
 <output_format>
-Provide your review in the following format. Limit your response to 200 words. Note if changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't include any further details in categories below.
+If changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't output any further details in categories below.
+Otherwise provide your review in the following format. Limit your response to 200 words.
 
 Summary:
 [Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below, Note if changed code is too simple or not fitting in categories below, please answer "No Review Needed, LGTM!" directly. Limit your response to 200 words.]
@@ -397,6 +449,84 @@ export async function invokeModel(client: BedrockRuntimeClient, modelId: string,
   return finalResult;
 }
 
+async function generateCodeReviewComment(bedrockClient: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, excludePatterns: string[], reviewLevel: string): Promise<void> {
+
+  const pullRequest = context.payload.pull_request as PullRequest;
+  const repo = context.repo;
+
+  // fetch the list of files changed in the PR each time since the file can be changed in operation like unit test generation, code review, etc.
+  const { data: files } = await octokit.rest.pulls.listFiles({
+    ...repo,
+    pull_number: pullRequest.number,
+  });
+
+  let reviewComments: ReviewComment[] = [];
+
+  for (const file of files as PullFile[]) {
+    // The sample contents of file.patch, which contains a unified diff representation of the changes made to a file in a pull request:
+    // diff --git a/file1.txt b/file1.txt
+    // index 7cfc5c8..e69de29 100644
+    // --- a/file1.txt
+    // +++ b/file1.txt
+    // @@ -1,3 +1,2 @@
+    // -This is the original line 1.
+    // -This is the original line 2.
+    // +This is the new line 1.
+    //  This is an unchanged line.
+    // @@ is the hunk header that shows where the changes are and how many lines are changed. In this case, it indicates that the changes start at line 1 of the old file and affect 3 lines, and start at line 1 of the new file and affect 2 lines.
+    if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
+      console.log(`Reviewing file: ${file.filename}`);
+
+      const changedLines = file.patch
+        .split('\n')
+        .filter(line => line.startsWith('+') && !line.startsWith('+++'))
+        .map(line => line.substring(1));
+
+      if (changedLines.length === 0) continue;
+
+      const fileContent = changedLines.join('\n');
+      const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
+      let formattedContent = promptTemplate.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
+
+      // invoke model to generate review comments
+      const payloadInput = formattedContent;
+      var review = await invokeModel(bedrockClient, modelId, payloadInput);  
+
+      // log the generated review comments and check if it is empty
+      console.log(`Review comments ${review} generated for file: ${file.filename}`);
+      if (!review || review.trim() == '') {
+        console.log("No review comments generated for file: {}", file.filename);
+        // add default review comment
+        review = "No review needed, LGTM!";
+        continue;
+      }
+      const position = file.patch.split('\n').findIndex(line => line.startsWith('+') && !line.startsWith('+++')) + 1;
+      if (position > 0) {
+        reviewComments.push({
+          path: file.filename,
+          body: review,
+          position: position,
+        });
+      }
+    } else {
+      console.log(`Skipping file: ${file.filename}`);
+    }
+  }
+
+  if (reviewComments.length > 0) {
+    console.log('Posting code review comments to the PR with content:', reviewComments);
+    await octokit.rest.pulls.createReview({
+      ...repo,
+      pull_number: pullRequest.number,
+      event: 'COMMENT',
+      comments: reviewComments,
+    });
+    console.log('Code review comments posted successfully.');
+  } else {
+    console.log('No review comments to post.');
+  }
+}
+
 async function run(): Promise<void> {
   try {
     const githubToken = core.getInput('github-token');
@@ -404,6 +534,7 @@ async function run(): Promise<void> {
     const modelId = core.getInput('model-id');
     const excludeFiles = core.getInput('exclude-files');
     const reviewLevel = core.getInput('review-level');
+    const codeReview = core.getInput('code-review');
     const generatePRDesc = core.getInput('generate-pr-description');
     const generateUnitTestSuite = core.getInput('generate-unit-test-suite');
 
@@ -413,8 +544,10 @@ async function run(): Promise<void> {
     console.log(`AWS Region: ${awsRegion}`);
     console.log(`Model ID: ${modelId}`);
     console.log(`Excluded files: ${excludeFiles}`);
+    console.log(`Code review: ${codeReview}`);
     console.log(`Review level: ${reviewLevel}`);
-    console.log(`Generate PR description: ${generatePRDesc ? 'Yes' : 'No'}`);
+    console.log(`Generate PR description: ${generatePRDesc ? 'true' : 'false'}`);
+    console.log(`Generate unit test suite: ${generateUnitTestSuite ? 'true' : 'false'}`);
 
     if (!githubToken) {
       throw new Error('GitHub token is not set');
@@ -433,86 +566,23 @@ async function run(): Promise<void> {
 
     console.log(`Reviewing PR #${pullRequest.number} in ${repo.owner}/${repo.repo}`);
 
-    const { data: files } = await octokit.rest.pulls.listFiles({
-      ...repo,
-      pull_number: pullRequest.number,
-    });
-
     // branch to generate PR description
-    if (generatePRDesc) {
-      const prDescriptionTemplate = await generatePRDescription(files as PullFile[], octokit, repo, pullRequest.number);
-      // invoke model to generate complete PR description
-      const payloadInput = prDescriptionTemplate;
-      const prDescription = await invokeModel(bedrockClient, modelId, payloadInput);
-
-      // append fixed template content to the generated PR description
-      const prDescriptionWithTemplate = prDescription + fixed_pr_generation_template;
-
-      await octokit.rest.pulls.update({
-        ...repo,
-        pull_number: pullRequest.number,
-        body: prDescriptionWithTemplate,
-      });
-      console.log('PR description updated successfully.');
+    if (generatePRDesc.toLowerCase() === 'true') {
+      await generatePRDescription(bedrockClient, modelId, octokit);
     }
 
     // branch to generate unit tests suite
-    if (generateUnitTestSuite) {
+    if (generateUnitTestSuite.toLowerCase() === 'true') {
       await generateUnitTestsSuite(bedrockClient, modelId, octokit, repo);
     }
 
-    let reviewComments: ReviewComment[] = [];
-
-    for (const file of files as PullFile[]) {
-      if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
-        console.log(`Reviewing file: ${file.filename}`);
-
-        const changedLines = file.patch
-          .split('\n')
-          .filter(line => line.startsWith('+') && !line.startsWith('+++'))
-          .map(line => line.substring(1));
-
-        if (changedLines.length === 0) continue;
-
-        const fileContent = changedLines.join('\n');
-        const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
-        let formattedContent = promptTemplate.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
-
-        // invoke model to generate review comments
-        const payloadInput = formattedContent;
-        var review = await invokeModel(bedrockClient, modelId, payloadInput);  
-
-        // log the generated review comments and check if it is empty
-        console.log(`Review comments ${review} generated for file: ${file.filename}`);
-        if (!review || review.trim() == '') {
-          console.log("No review comments generated for file: {}", file.filename);
-          // add default review comment
-          review = "No review needed, LGTM!";
-          continue;
-        }
-        const position = file.patch.split('\n').findIndex(line => line.startsWith('+') && !line.startsWith('+++')) + 1;
-        if (position > 0) {
-          reviewComments.push({
-            path: file.filename,
-            body: review,
-            position: position,
-          });
-        }
-      } else {
-        console.log(`Skipping file: ${file.filename}`);
-      }
-    }
-
-    if (reviewComments.length > 0) {
-      await octokit.rest.pulls.createReview({
-        ...repo,
-        pull_number: pullRequest.number,
-        event: 'COMMENT',
-        comments: reviewComments,
-      });
-      console.log('Code review comments posted successfully.');
-    } else {
-      console.log('No review comments to post.');
+    // branch to generate code review comments
+    if (codeReview.toLowerCase() === 'true') {
+      // Wait for a fixed amount of time (e.g., 5 seconds)
+      const delayMs = 5000; // 5 seconds
+      console.log(`Waiting ${delayMs}ms for GitHub to process the changes...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+      await generateCodeReviewComment(bedrockClient, modelId, octokit, excludePatterns, reviewLevel);
     }
 
   } catch (error) {
