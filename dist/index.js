@@ -513,8 +513,8 @@ async function run() {
         console.log(`Excluded files: ${excludeFiles}`);
         console.log(`Code review: ${codeReview}`);
         console.log(`Review level: ${reviewLevel}`);
-        console.log(`Generate PR description: ${generatePRDesc ? 'true' : 'false'}`);
-        console.log(`Generate unit test suite: ${generateUnitTestSuite ? 'true' : 'false'}`);
+        console.log(`Generate PR description: ${generatePRDesc.toLowerCase() === 'true' ? 'true' : 'false'}`);
+        console.log(`Generate unit test suite: ${generateUnitTestSuite.toLowerCase() === 'true' ? 'true' : 'false'}`);
         if (!githubToken) {
             throw new Error('GitHub token is not set');
         }
@@ -538,9 +538,9 @@ async function run() {
         // branch to generate code review comments
         if (codeReview.toLowerCase() === 'true') {
             // Wait for a fixed amount of time (e.g., 5 seconds)
-            const delayMs = 5000; // 5 seconds
-            console.log(`Waiting ${delayMs}ms for GitHub to process the changes...`);
-            await new Promise(resolve => setTimeout(resolve, delayMs));
+            // const delayMs = 5000; // 5 seconds
+            // console.log(`Waiting ${delayMs}ms for GitHub to process the changes...`);
+            // await new Promise(resolve => setTimeout(resolve, delayMs));
             await generateCodeReviewComment(bedrockClient, modelId, octokit, excludePatterns, reviewLevel);
         }
     }
