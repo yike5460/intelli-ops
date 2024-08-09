@@ -232,3 +232,5 @@ This project is licensed under Apache 2.0 License. See the LICENSE file for deta
 - support chinese
 - support issue operation with code source and search api
 - observe the action operation metrics
+- better ut case generation with preflight execution 
+- chat with coder as pair coding, inspired by https://coderabbit.ai
