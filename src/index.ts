@@ -31,7 +31,7 @@ interface PullFile {
 }
 
 // This function splits the content into chunks of maxChunkSize
-function splitContentIntoChunks(content: string, maxChunkSize: number): string[] {
+function splitContentIntoChunks_deprecated(content: string, maxChunkSize: number): string[] {
   const chunks: string[] = [];
   let currentChunk = '';
 
@@ -171,10 +171,43 @@ async function generatePRDescription(client: BedrockRuntimeClient, modelId: stri
   console.log('PR description updated successfully.');
 }
 
+function splitIntoChunks(combinedCode: string): Record<string, string> {
+  // split the whole combinedCode content into individual file chunk (index.ts, index_test.ts, index.js) by recognize the character like: "// File: ./index.ts", filter the content with suffix ".tx" and not contain "test" in file name (index.ts),
+  const fileChunks: Record<string, string> = {};
+  const filePattern = /\/\/ File: \.\/(.+)/;
+  let currentFile = '';
+  let currentContent = '';
+
+  combinedCode.split('\n').forEach(line => {
+    const match = line.match(filePattern);
+    if (match) {
+      if (currentFile) {
+        fileChunks[currentFile] = currentContent.trim();
+      }
+      currentFile = match[1] as string;
+      currentContent = '';
+    } else {
+      currentContent += line + '\n';
+    }
+  });
+
+  if (currentFile) {
+    fileChunks[currentFile] = currentContent.trim();
+  }
+
+  return fileChunks;
+}
+
+function extractFunctions(content: string): string[] {
+  const functionPattern = /function\s+\w+\s*\([^)]*\)\s*{[^}]*}/g;
+  return content.match(functionPattern) || [];
+}
+
 async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }): Promise<void> {
   const pullRequest = context.payload.pull_request as PullRequest;
   const branchName = pullRequest.head.ref;
   let testCases: any[] = []; // Declare the testCases variable
+  let allTestCases: any[] = []; // Store all generated test cases
 
   // Execute the code_layout.sh script
   const outputFile = 'combined_code_dump.txt';
@@ -183,21 +216,42 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
 
   // Read the combined code
   const combinedCode = fs.readFileSync(outputFile, 'utf8');
-  // TODO, split the content into chunks of maxChunkSize, truncate the content if it exceeds the maxChunkSize
-  const maxChunkSize = 1024;
-  const chunks = splitContentIntoChunks(combinedCode, maxChunkSize);
-  if (chunks[0] !== undefined) {
-    // log the processing phase
-    console.log(`Processing chunk 1 of ${chunks.length}`);
-    testCases = await generateUnitTests(client, modelId, chunks[0]);
-    // check if the testCases is empty
-    if (testCases.length === 0) {
-      console.log('No test cases generated. Skipping unit tests execution and report generation.');
-      return;
+
+  // Split the combined code into chunks based on file patterns
+  const fileChunks = splitIntoChunks(combinedCode);
+
+  // Process each file chunk
+  for (const [filename, content] of Object.entries(fileChunks)) {
+    if (filename.endsWith('.ts') && !filename.includes('test')) {
+      console.log(`Processing file: ${filename}`);
+      const functions = extractFunctions(content);
+
+      for (const func of functions) {
+        const maxChunkSize = 1024;
+        if (func.length <= maxChunkSize) {
+          const testCases = await generateUnitTests(client, modelId, func);
+          if (testCases.length > 0) {
+            allTestCases = allTestCases.concat(testCases);
+          }
+        } else {
+          console.log(`Skipping function in ${filename} due to size limit`);
+        }
+      }
     }
-    await runUnitTests(testCases);
-    await generateTestReport(testCases);
   }
+
+  if (allTestCases.length === 0) {
+    console.log('No test cases generated. Skipping unit tests execution and report generation.');
+    return;
+  }
+
+  if (allTestCases.length === 0) {
+    console.log('No test cases generated. Skipping unit tests execution and report generation.');
+    return;
+  }
+
+  await runUnitTests(allTestCases);
+  await generateTestReport(allTestCases);
   console.log('Unit tests and report generated successfully.');
   // Add the generated unit tests to existing PR
   if (pullRequest) {

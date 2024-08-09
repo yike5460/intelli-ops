@@ -41,7 +41,7 @@ const child_process_1 = __nccwpck_require__(2081);
 const path = __importStar(__nccwpck_require__(1017));
 const fs = __importStar(__nccwpck_require__(7147));
 // This function splits the content into chunks of maxChunkSize
-function splitContentIntoChunks(content, maxChunkSize) {
+function splitContentIntoChunks_deprecated(content, maxChunkSize) {
     const chunks = [];
     let currentChunk = '';
     content.split('\n').forEach(line => {
@@ -166,31 +166,76 @@ async function generatePRDescription(client, modelId, octokit) {
     });
     console.log('PR description updated successfully.');
 }
+function splitIntoChunks(combinedCode) {
+    // split the whole combinedCode content into individual file chunk (index.ts, index_test.ts, index.js) by recognize the character like: "// File: ./index.ts", filter the content with suffix ".tx" and not contain "test" in file name (index.ts),
+    const fileChunks = {};
+    const filePattern = /\/\/ File: \.\/(.+)/;
+    let currentFile = '';
+    let currentContent = '';
+    combinedCode.split('\n').forEach(line => {
+        const match = line.match(filePattern);
+        if (match) {
+            if (currentFile) {
+                fileChunks[currentFile] = currentContent.trim();
+            }
+            currentFile = match[1];
+            currentContent = '';
+        }
+        else {
+            currentContent += line + '\n';
+        }
+    });
+    if (currentFile) {
+        fileChunks[currentFile] = currentContent.trim();
+    }
+    return fileChunks;
+}
+function extractFunctions(content) {
+    const functionPattern = /function\s+\w+\s*\([^)]*\)\s*{[^}]*}/g;
+    return content.match(functionPattern) || [];
+}
 async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     const pullRequest = github_1.context.payload.pull_request;
     const branchName = pullRequest.head.ref;
     let testCases = []; // Declare the testCases variable
+    let allTestCases = []; // Store all generated test cases
     // Execute the code_layout.sh script
     const outputFile = 'combined_code_dump.txt';
     const scriptPath = path.join(__dirname, 'code_layout.sh');
     (0, child_process_1.execSync)(`chmod +x "${scriptPath}" && "${scriptPath}" . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
     // Read the combined code
     const combinedCode = fs.readFileSync(outputFile, 'utf8');
-    // TODO, split the content into chunks of maxChunkSize, truncate the content if it exceeds the maxChunkSize
-    const maxChunkSize = 1024;
-    const chunks = splitContentIntoChunks(combinedCode, maxChunkSize);
-    if (chunks[0] !== undefined) {
-        // log the processing phase
-        console.log(`Processing chunk 1 of ${chunks.length}`);
-        testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, chunks[0]);
-        // check if the testCases is empty
-        if (testCases.length === 0) {
-            console.log('No test cases generated. Skipping unit tests execution and report generation.');
-            return;
+    // Split the combined code into chunks based on file patterns
+    const fileChunks = splitIntoChunks(combinedCode);
+    // Process each file chunk
+    for (const [filename, content] of Object.entries(fileChunks)) {
+        if (filename.endsWith('.ts') && !filename.includes('test')) {
+            console.log(`Processing file: ${filename}`);
+            const functions = extractFunctions(content);
+            for (const func of functions) {
+                const maxChunkSize = 1024;
+                if (func.length <= maxChunkSize) {
+                    const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, func);
+                    if (testCases.length > 0) {
+                        allTestCases = allTestCases.concat(testCases);
+                    }
+                }
+                else {
+                    console.log(`Skipping function in ${filename} due to size limit`);
+                }
+            }
         }
-        await (0, ut_ts_1.runUnitTests)(testCases);
-        await (0, ut_ts_1.generateTestReport)(testCases);
     }
+    if (allTestCases.length === 0) {
+        console.log('No test cases generated. Skipping unit tests execution and report generation.');
+        return;
+    }
+    if (allTestCases.length === 0) {
+        console.log('No test cases generated. Skipping unit tests execution and report generation.');
+        return;
+    }
+    await (0, ut_ts_1.runUnitTests)(allTestCases);
+    await (0, ut_ts_1.generateTestReport)(allTestCases);
     console.log('Unit tests and report generated successfully.');
     // Add the generated unit tests to existing PR
     if (pullRequest) {
