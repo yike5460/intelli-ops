@@ -208,28 +208,31 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     // Split the combined code into chunks based on file patterns
     const fileChunks = splitIntoChunks(combinedCode);
     // Process each file chunk
+    // Process each file chunk
     for (const [filename, content] of Object.entries(fileChunks)) {
         if (filename.endsWith('.ts') && !filename.includes('test')) {
-            console.log(`Processing file: ${filename}`);
             const functions = extractFunctions(content);
-            for (const func of functions) {
+            const testCasesPromises = functions.map(async (func) => {
                 const maxChunkSize = 1024;
+                console.log(`Processing function ${func} in ${filename}`);
                 if (func.length <= maxChunkSize) {
                     const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, func);
-                    if (testCases.length > 0) {
-                        allTestCases = allTestCases.concat(testCases);
-                    }
+                    return testCases;
                 }
                 else {
                     console.log(`Skipping function in ${filename} due to size limit`);
+                    return [];
                 }
-            }
+            });
+            const testCasesResults = await Promise.all(testCasesPromises);
+            testCasesResults.forEach((testCases) => {
+                if (testCases.length > 0) {
+                    allTestCases = allTestCases.concat(testCases);
+                }
+            });
         }
     }
-    if (allTestCases.length === 0) {
-        console.log('No test cases generated. Skipping unit tests execution and report generation.');
-        return;
-    }
+    console.log('All test cases:', allTestCases);
     if (allTestCases.length === 0) {
         console.log('No test cases generated. Skipping unit tests execution and report generation.');
         return;
