@@ -26,7 +26,8 @@ combine_files() {
     for ext in "${FILE_EXTENSIONS[@]:1}"; do
         find_command+=" -o -name \"*.$ext\""
     done
-    find_command+=" \\) -print0"
+    # find_command+=" \\) -print0"
+    find_command+=" \\) -not -path \"*/node_modules/*\" -print0"
 
     eval $find_command | while IFS= read -r -d '' file; do
         echo "// File: $file" >> "$OUTPUT_FILE"

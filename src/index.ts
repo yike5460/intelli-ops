@@ -276,7 +276,7 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
       // console.log('PR description updated with unit tests summary.');
 
       // Create a new file with the generated unit tests in test folder
-      const unitTestsContent = testCases.map(tc => tc.code).join('\n\n');
+      const unitTestsContent = allTestCases.map(tc => tc.code).join('\n\n');
       const unitTestsFileName = 'test/unit_tests.ts';
       console.log(`Generating unit tests to PR #${pullRequest.number} on branch: ${branchName} with unit test content: ${unitTestsContent}`);
 
