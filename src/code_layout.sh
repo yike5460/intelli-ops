@@ -21,7 +21,8 @@ fi
 # Function to combine files
 combine_files() {
     local dir="$1"
-    local find_command="find \"$dir\" -type d -name node_modules -prune -o -type f \\( -name \"*.${FILE_EXTENSIONS[0]}\""
+    # local find_command="find \"$dir\" -type d -name node_modules -prune -o -type f \\( -name \"*.${FILE_EXTENSIONS[0]}\""
+    local find_command="find \"$dir\" -type f \\( -name \"*.${FILE_EXTENSIONS[0]}\""
     for ext in "${FILE_EXTENSIONS[@]:1}"; do
         find_command+=" -o -name \"*.$ext\""
     done

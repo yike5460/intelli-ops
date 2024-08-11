@@ -210,7 +210,8 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     // Process each file chunk
     // Process each file chunk
     for (const [filename, content] of Object.entries(fileChunks)) {
-        if (filename.endsWith('.ts') && !filename.includes('test')) {
+        // skip file *.d.ts and test files
+        if (filename.endsWith('.ts') && !filename.includes('test') && !filename.endsWith('.d.ts')) {
             const functions = extractFunctions(content);
             const testCasesPromises = functions.map(async (func) => {
                 const maxChunkSize = 1024;
