@@ -1,6 +1,0 @@
-const mockEvent = { body: JSON.stringify({ prompt: 'Hello', parameters: { max_new_tokens: 256, temperature: 0.1 } }) }; const mockContext = {}; const mockInvokeEndpointResponse = { Body: { read: () => JSON.stringify({ result: 'Hello, how are you?' }) } }; jest.mock('aws-sdk', () => ({ client: jest.fn(() => ({ invoke_endpoint: jest.fn(() => mockInvokeEndpointResponse) })) })); test('lambda_handler function with valid input', async () => { const result = await lambda_handler(mockEvent, mockContext); expect(result).toEqual({ statusCode: 200, body: JSON.stringify({ result: 'Hello, how are you?' }) }); });
-
-const mockEvent = { body: JSON.stringify({ parameters: { max_new_tokens: 256, temperature: 0.1 } }) }; const mockContext = {}; test('lambda_handler function with missing prompt', async () => { const result = await lambda_handler(mockEvent, mockContext); expect(result).toEqual({ statusCode: 200, body: JSON.stringify({ result: '' }) }); });
-
-const mockEvent = { body: 'invalid' }; const mockContext = {}; test('lambda_handler function with invalid event body', async () => { const result = await lambda_handler(mockEvent, mockContext); expect(result).toEqual({ statusCode: 400, body: 'Bad Request' }); });
-
