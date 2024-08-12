@@ -188,6 +188,7 @@ function splitIntoChunks(combinedCode) {
     if (currentFile) {
         fileChunks[currentFile] = currentContent.trim();
     }
+    console.log('File chunks for combined code:', fileChunks);
     return fileChunks;
 }
 function extractFunctions(content) {
@@ -205,6 +206,8 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     (0, child_process_1.execSync)(`chmod +x "${scriptPath}" && "${scriptPath}" . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
     // Read the combined code
     const combinedCode = fs.readFileSync(outputFile, 'utf8');
+    // Tail the first 1000 characters of the combined code
+    console.log('Combined code:', combinedCode.slice(0, 1000));
     // Split the combined code into chunks based on file patterns
     const fileChunks = splitIntoChunks(combinedCode);
     // Process each file chunk
