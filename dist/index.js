@@ -188,7 +188,6 @@ function splitIntoChunks(combinedCode) {
     if (currentFile) {
         fileChunks[currentFile] = currentContent.trim();
     }
-    console.log('File chunks for combined code:', fileChunks);
     return fileChunks;
 }
 function extractFunctions(content) {
@@ -211,11 +210,10 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     const fileChunks = splitIntoChunks(combinedCode);
     // Process each file chunk
     for (const [filename, content] of Object.entries(fileChunks)) {
-        console.log(`Processing file ${filename} with content: ${content}`);
+        console.log(`Processing content in ${filename}`);
         // skip file *.d.ts and test files
         if (filename.endsWith('.ts') && !filename.includes('test') && !filename.endsWith('.d.ts')) {
             const functions = extractFunctions(content);
-            console.log(`Extracted functions from ${filename}:`, functions);
             const testCasesPromises = functions.map(async (func) => {
                 const maxChunkSize = 1024;
                 console.log(`Processing function ${func} in ${filename}`);
