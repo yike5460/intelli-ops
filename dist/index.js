@@ -192,8 +192,9 @@ function splitIntoChunks(combinedCode) {
     return fileChunks;
 }
 function extractFunctions(content) {
-    const functionPattern = /function\s+\w+\s*\([^)]*\)\s*{[^}]*}/g;
-    return content.match(functionPattern) || [];
+    const functionPattern = /(?:export\s+)?(?:async\s+)?function\s+\w+\s*\([^)]*\)(?:\s*:\s*[^{]*?)?\s*{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*}/gs;
+    const matches = content.match(functionPattern);
+    return matches ? matches.map(match => match.trim()) : [];
 }
 async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     const pullRequest = github_1.context.payload.pull_request;

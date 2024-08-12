@@ -199,8 +199,9 @@ function splitIntoChunks(combinedCode: string): Record<string, string> {
 }
 
 function extractFunctions(content: string): string[] {
-  const functionPattern = /function\s+\w+\s*\([^)]*\)\s*{[^}]*}/g;
-  return content.match(functionPattern) || [];
+  const functionPattern = /(?:export\s+)?(?:async\s+)?function\s+\w+\s*\([^)]*\)(?:\s*:\s*[^{]*?)?\s*{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*}/gs;
+  const matches = content.match(functionPattern);
+  return matches ? matches.map(match => match.trim()) : [];
 }
 
 async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }): Promise<void> {
