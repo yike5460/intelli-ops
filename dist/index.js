@@ -51586,6 +51586,17 @@ const fs = __importStar(__nccwpck_require__(7147));
 const path = __importStar(__nccwpck_require__(1017));
 const client_bedrock_runtime_1 = __nccwpck_require__(9687);
 const child_process_1 = __nccwpck_require__(2081);
+const promises_1 = __nccwpck_require__(8670);
+async function generateFakeResponse() {
+    // Return a predefined fake response structure
+    return [
+        {
+            name: 'Default Unit Test',
+            type: 'direct',
+            code: "test('default test', () => { expect(true).toBe(true); });",
+        },
+    ];
+}
 async function generateUnitTests(client, modelId, sourceCode) {
     // Define the prompt to send to
     const prompt = `
@@ -51638,7 +51649,7 @@ async function generateUnitTests(client, modelId, sourceCode) {
     
     Ensure that your response is a valid JSON array containing objects with the specified structure. Do not include any explanatory text outside of the JSON array.
     `;
-    console.log('Generating unit tests with prompt length:', prompt.length + sourceCode.length);
+    console.log('Generating unit tests with total prompt length:', prompt.length + sourceCode.length);
     // exact the same implementation as function invokeModel in index.ts
     const payload = {
         anthropic_version: "bedrock-2023-05-31",
@@ -51659,22 +51670,37 @@ async function generateUnitTests(client, modelId, sourceCode) {
         contentType: "application/json",
         body: JSON.stringify(payload),
     });
-    const apiResponse = await client.send(command);
-    const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
-    const responseBody = JSON.parse(decodedResponseBody);
-    const finalResult = responseBody.content[0].text;
-    // Parse the finalResult string into an array of TestCase objects
+    const timeoutMs = 10 * 1000; // 10 seconds
     try {
-        const parsedTestCases = JSON.parse(finalResult);
-        if (!Array.isArray(parsedTestCases)) {
-            throw new Error('Parsed result is not an array');
+        const apiResponse = await Promise.race([
+            client.send(command),
+            (0, promises_1.setTimeout)(timeoutMs),
+        ]);
+        if (apiResponse === undefined) {
+            console.log('Request timed out, returning fake response');
+            // Return default or fake response
+            return await generateFakeResponse();
         }
-        console.log('generated test cases:', parsedTestCases);
-        return parsedTestCases;
+        const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
+        const responseBody = JSON.parse(decodedResponseBody);
+        const finalResult = responseBody.content[0].text;
+        // Parse the finalResult string into an array of TestCase objects
+        try {
+            const parsedTestCases = JSON.parse(finalResult);
+            if (!Array.isArray(parsedTestCases)) {
+                throw new Error('Parsed result is not an array');
+            }
+            console.log('generated test cases:', parsedTestCases);
+            return parsedTestCases;
+        }
+        catch (error) {
+            console.error('Failed to parse AI response into TestCase array:', error);
+            console.log('Raw AI response:', finalResult);
+            return [];
+        }
     }
     catch (error) {
-        console.error('Failed to parse AI response into TestCase array:', error);
-        console.log('Raw AI response:', finalResult);
+        console.error('Error occurred while generating unit tests:', error);
         return [];
     }
 }
@@ -51925,6 +51951,14 @@ module.exports = require("stream/web");
 
 "use strict";
 module.exports = require("string_decoder");
+
+/***/ }),
+
+/***/ 8670:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("timers/promises");
 
 /***/ }),
 

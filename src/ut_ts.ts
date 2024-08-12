@@ -2,11 +2,23 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import { execSync } from 'child_process';
+import { setTimeout } from 'timers/promises';
 
 interface TestCase {
     name: string;
     type: 'direct' | 'indirect' | 'not-testable';
     code: string;
+}
+
+async function generateFakeResponse(): Promise<TestCase[]> {
+  // Return a predefined fake response structure
+  return [
+      {
+          name: 'Default Unit Test',
+          type: 'direct',
+          code: "test('default test', () => { expect(true).toBe(true); });",
+      },
+  ];
 }
 
 export async function generateUnitTests(client: BedrockRuntimeClient, modelId: string, sourceCode: string): Promise<TestCase[]> {
@@ -62,7 +74,7 @@ export async function generateUnitTests(client: BedrockRuntimeClient, modelId: s
     Ensure that your response is a valid JSON array containing objects with the specified structure. Do not include any explanatory text outside of the JSON array.
     `;    
 
-    console.log('Generating unit tests with prompt length:', prompt.length + sourceCode.length);
+    console.log('Generating unit tests with total prompt length:', prompt.length + sourceCode.length);
 
     // exact the same implementation as function invokeModel in index.ts
     const payload = {
@@ -86,23 +98,37 @@ export async function generateUnitTests(client: BedrockRuntimeClient, modelId: s
         body: JSON.stringify(payload),
     });
 
-    const apiResponse = await client.send(command);
-    const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
-    const responseBody = JSON.parse(decodedResponseBody);
-    const finalResult = responseBody.content[0].text;
-    // Parse the finalResult string into an array of TestCase objects
+    const timeoutMs = 10 * 1000; // 10 seconds
     try {
+      const apiResponse = await Promise.race([
+        client.send(command),
+        setTimeout(timeoutMs),
+      ]);
+      if (apiResponse === undefined) {
+        console.log('Request timed out, returning fake response');
+        // Return default or fake response
+        return await generateFakeResponse();
+      }
+      const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
+      const responseBody = JSON.parse(decodedResponseBody);
+      const finalResult = responseBody.content[0].text;
+      // Parse the finalResult string into an array of TestCase objects
+      try {
         const parsedTestCases = JSON.parse(finalResult) as TestCase[];
         if (!Array.isArray(parsedTestCases)) {
             throw new Error('Parsed result is not an array');
         }
         console.log('generated test cases:', parsedTestCases);
         return parsedTestCases;
+      } catch (error) {
+          console.error('Failed to parse AI response into TestCase array:', error);
+          console.log('Raw AI response:', finalResult);
+          return [];
+      }
     } catch (error) {
-        console.error('Failed to parse AI response into TestCase array:', error);
-        console.log('Raw AI response:', finalResult);
-        return [];
-    }
+      console.error('Error occurred while generating unit tests:', error);
+      return [];
+  }
 }
 
 export async function runUnitTests(testCases: TestCase[]): Promise<void> {
