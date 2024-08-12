@@ -218,20 +218,32 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
                 const maxChunkSize = 1024;
                 console.log(`Processing function ${func} in ${filename}`);
                 if (func.length <= maxChunkSize) {
-                    const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, func);
-                    return testCases;
+                    try {
+                        const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, func);
+                        console.log(`Generated test cases for function ${func} in ${filename}`);
+                        return testCases;
+                    }
+                    catch (error) {
+                        console.error(`Error generating test cases for function ${func} in ${filename}:`, error);
+                        return [];
+                    }
                 }
                 else {
                     console.log(`Skipping function in ${filename} due to size limit`);
                     return [];
                 }
             });
-            const testCasesResults = await Promise.all(testCasesPromises);
-            testCasesResults.forEach((testCases) => {
-                if (testCases.length > 0) {
-                    allTestCases = allTestCases.concat(testCases);
-                }
-            });
+            try {
+                const testCasesResults = await Promise.all(testCasesPromises);
+                testCasesResults.forEach((testCases) => {
+                    if (testCases.length > 0) {
+                        allTestCases = allTestCases.concat(testCases);
+                    }
+                });
+            }
+            catch (error) {
+                console.error(`Error processing test cases for file ${filename}:`, error);
+            }
         }
     }
     console.log('All test cases:', allTestCases);
