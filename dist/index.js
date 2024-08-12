@@ -206,13 +206,11 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     (0, child_process_1.execSync)(`chmod +x "${scriptPath}" && "${scriptPath}" . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
     // Read the combined code
     const combinedCode = fs.readFileSync(outputFile, 'utf8');
-    // Tail the first 1000 characters of the combined code
-    console.log('Combined code:', combinedCode.slice(0, 1000));
     // Split the combined code into chunks based on file patterns
     const fileChunks = splitIntoChunks(combinedCode);
     // Process each file chunk
-    // Process each file chunk
     for (const [filename, content] of Object.entries(fileChunks)) {
+        console.log(`Processing file ${filename} with content: ${content}`);
         // skip file *.d.ts and test files
         if (filename.endsWith('.ts') && !filename.includes('test') && !filename.endsWith('.d.ts')) {
             const functions = extractFunctions(content);
