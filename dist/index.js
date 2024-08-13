@@ -190,7 +190,7 @@ function splitIntoChunks(combinedCode) {
     }
     return fileChunks;
 }
-function extractFunctions(content) {
+async function extractFunctions(content) {
     const functionPattern = /(?:export\s+)?(?:async\s+)?function\s+\w+\s*\([^)]*\)(?:\s*:\s*[^{]*?)?\s*{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*}/gs;
     const matches = content.match(functionPattern);
     return matches ? matches.map(match => match.trim()) : [];
@@ -213,10 +213,10 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
         console.log(`Processing content in ${filename}`);
         // skip file *.d.ts and test files
         if (filename.endsWith('.ts') && !filename.includes('test') && !filename.endsWith('.d.ts')) {
-            const functions = extractFunctions(content);
+            const functions = await extractFunctions(content);
+            console.log(`Extracted functions: ${functions} from ${filename}`);
             const testCasesPromises = functions.map(async (func) => {
                 const maxChunkSize = 1024;
-                console.log(`Processing function ${func} in ${filename}`);
                 if (func.length <= maxChunkSize) {
                     try {
                         const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, func);
