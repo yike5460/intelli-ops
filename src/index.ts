@@ -198,9 +198,16 @@ function splitIntoChunks(combinedCode: string): Record<string, string> {
 }
 
 async function extractFunctions(content: string): Promise<string[]> {
-  const functionPattern = /(?:export\s+)?(?:async\s+)?function\s+\w+\s*\([^)]*\)(?:\s*:\s*[^{]*?)?\s*{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*}/gs;
-  const matches = content.match(functionPattern);
-  return matches ? matches.map(match => match.trim()) : [];
+  // const functionPattern = /(?:export\s+)?(?:async\s+)?function\s+\w+\s*\([^)]*\)(?:\s*:\s*[^{]*?)?\s*{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*}/gs;
+  // const matches = content.match(functionPattern);
+  // return matches ? matches.map(match => match.trim()) : [];
+
+  // Dummy response for debugging purposes
+  return [
+    'export async function generateUnitTests(client: BedrockRuntimeClient, modelId: string, sourceCode: string): Promise<TestCase[]> { ... }',
+    'async function runUnitTests(testCases: TestCase[]): Promise<void> { ... }',
+    'function generateTestReport(testCases: TestCase[]): Promise<void> { ... }',
+  ];
 }
 
 async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }): Promise<void> {
