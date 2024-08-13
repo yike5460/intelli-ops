@@ -226,7 +226,7 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
                 if (func.length <= maxChunkSize) {
                     try {
                         const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, func);
-                        console.log(`Generated test cases for function ${func} from ${filename}: ${testCases}`);
+                        console.log(`Generated test cases for function ${func} from ${filename}`);
                         return testCases;
                     }
                     catch (error) {
@@ -239,18 +239,20 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
                     return [];
                 }
             });
-            // try {
-            //   const testCasesResults = await Promise.allSettled(testCasesPromises);
-            //   testCasesResults.forEach((result) => {
-            //     if (result.status === 'fulfilled' && result.value.length > 0) {
-            //       allTestCases = allTestCases.concat(result.value);
-            //     } else if (result.status === 'rejected') {
-            //       console.error(`Error processing test cases for file ${filename}:`, result.reason);
-            //     }
-            //   });
-            // } catch (error) {
-            //   console.error(`Error processing test cases for file ${filename}:`, error);
-            // }
+            try {
+                const testCasesResults = await Promise.allSettled(testCasesPromises);
+                testCasesResults.forEach((result) => {
+                    if (result.status === 'fulfilled' && result.value.length > 0) {
+                        allTestCases = allTestCases.concat(result.value);
+                    }
+                    else if (result.status === 'rejected') {
+                        console.error(`Error processing test cases for file ${filename}:`, result.reason);
+                    }
+                });
+            }
+            catch (error) {
+                console.error(`Error processing test cases for file ${filename}:`, error);
+            }
         }
     }
     console.log('All test cases:', allTestCases);
