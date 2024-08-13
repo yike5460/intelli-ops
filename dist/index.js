@@ -214,44 +214,61 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     const combinedCode = fs.readFileSync(outputFile, 'utf8');
     // Split the combined code into chunks based on file patterns
     const fileChunks = splitIntoChunks(combinedCode);
-    // Process each file chunk
+    // // Process each file chunk at function level
+    // for (const [filename, content] of Object.entries(fileChunks)) {
+    //   console.log(`Processing file ${filename}: ${content}`);
+    //   // skip file *.d.ts and test files
+    //   if (filename.endsWith('.ts') && !filename.includes('test') && !filename.endsWith('.d.ts')) {
+    //     const functions = await extractFunctions(content);
+    //     console.log(`Extracted functions: ${functions} from ${filename}`);
+    //     const testCasesPromises = functions.map(async (func) => {
+    //       const maxChunkSize = 1024;
+    //       if (func.length <= maxChunkSize) {
+    //         try {
+    //           const testCases = await generateUnitTests(client, modelId, func);
+    //           console.log(`Generated test cases for function ${func} from ${filename}`);
+    //           return testCases;
+    //         } catch (error) {
+    //           console.error(`Error generating test cases for function ${func} in ${filename}:`, error);
+    //           return [];
+    //         }
+    //       } else {
+    //         console.log(`Skipping function in ${filename} due to size limit`);
+    //         return [];
+    //       }
+    //     });
+    //     try {
+    //       const testCasesResults = await Promise.allSettled(testCasesPromises);
+    //       testCasesResults.forEach((result) => {
+    //         if (result.status === 'fulfilled' && result.value.length > 0) {
+    //           allTestCases = allTestCases.concat(result.value);
+    //         } else if (result.status === 'rejected') {
+    //           console.error(`Error processing test cases for file ${filename}:`, result.reason);
+    //         }
+    //       });
+    //     } catch (error) {
+    //       console.error(`Error processing test cases for file ${filename}:`, error);
+    //     }
+    //   }
+    // }
+    // Process each file chunk at file level
     for (const [filename, content] of Object.entries(fileChunks)) {
-        console.log(`Processing content in ${filename}`);
+        console.log(`Processing file ${filename}: ${content}`);
         // skip file *.d.ts and test files
         if (filename.endsWith('.ts') && !filename.includes('test') && !filename.endsWith('.d.ts')) {
-            const functions = await extractFunctions(content);
-            console.log(`Extracted functions: ${functions} from ${filename}`);
-            const testCasesPromises = functions.map(async (func) => {
-                const maxChunkSize = 1024;
-                if (func.length <= maxChunkSize) {
-                    try {
-                        const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, func);
-                        console.log(`Generated test cases for function ${func} from ${filename}`);
-                        return testCases;
-                    }
-                    catch (error) {
-                        console.error(`Error generating test cases for function ${func} in ${filename}:`, error);
-                        return [];
-                    }
+            const maxChunkSize = 4096;
+            if (content.length <= maxChunkSize) {
+                try {
+                    const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, content);
+                    console.log(`Generated test cases for file ${filename}`);
+                    allTestCases = allTestCases.concat(testCases);
                 }
-                else {
-                    console.log(`Skipping function in ${filename} due to size limit`);
-                    return [];
+                catch (error) {
+                    console.error(`Error generating test cases for file ${filename}:`, error);
                 }
-            });
-            try {
-                const testCasesResults = await Promise.allSettled(testCasesPromises);
-                testCasesResults.forEach((result) => {
-                    if (result.status === 'fulfilled' && result.value.length > 0) {
-                        allTestCases = allTestCases.concat(result.value);
-                    }
-                    else if (result.status === 'rejected') {
-                        console.error(`Error processing test cases for file ${filename}:`, result.reason);
-                    }
-                });
             }
-            catch (error) {
-                console.error(`Error processing test cases for file ${filename}:`, error);
+            else {
+                console.log(`Skipping file ${filename} due to size limit`);
             }
         }
     }
