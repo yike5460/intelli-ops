@@ -245,10 +245,12 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
       });
 
       try {
-        const testCasesResults = await Promise.all(testCasesPromises);
-        testCasesResults.forEach((testCases) => {
-          if (testCases.length > 0) {
-            allTestCases = allTestCases.concat(testCases);
+        const testCasesResults = await Promise.allSettled(testCasesPromises);
+        testCasesResults.forEach((result) => {
+          if (result.status === 'fulfilled' && result.value.length > 0) {
+            allTestCases = allTestCases.concat(result.value);
+          } else if (result.status === 'rejected') {
+            console.error(`Error processing test cases for file ${filename}:`, result.reason);
           }
         });
       } catch (error) {
