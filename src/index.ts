@@ -171,8 +171,8 @@ async function generatePRDescription(client: BedrockRuntimeClient, modelId: stri
   console.log('PR description updated successfully.');
 }
 
-function splitIntoChunks(combinedCode: string): Record<string, string> {
-  // split the whole combinedCode content into individual file chunk (index.ts, index_test.ts, index.js) by recognize the character like: "// File: ./index.ts", filter the content with suffix ".tx" and not contain "test" in file name (index.ts),
+function splitIntoSoloFile(combinedCode: string): Record<string, string> {
+  // split the whole combinedCode content into individual files (index.ts, index_test.ts, index.js) by recognize the character like: "// File: ./index.ts", filter the content with suffix ".tx" and not contain "test" in file name (index.ts),
   const fileChunks: Record<string, string> = {};
   const filePattern = /\/\/ File: \.\/(.+)/;
   let currentFile = '';
@@ -218,6 +218,7 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
 
   // Execute the code_layout.sh script
   const outputFile = 'combined_code_dump.txt';
+  // TODO, consider to extract the function per file in code_layout.sh instead of doing it here (extractFunctions)
   const scriptPath = path.join(__dirname, 'code_layout.sh');
   execSync(`chmod +x "${scriptPath}" && "${scriptPath}" . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
 
@@ -225,7 +226,7 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
   const combinedCode = fs.readFileSync(outputFile, 'utf8');
 
   // Split the combined code into chunks based on file patterns
-  const fileChunks = splitIntoChunks(combinedCode);
+  const fileChunks = splitIntoSoloFile(combinedCode);
 
   // // Process each file chunk at function level
   // for (const [filename, content] of Object.entries(fileChunks)) {
@@ -265,16 +266,16 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
   //     }
   //   }
   // }
-  // Process each file chunk at file level
+  // Process each file chunk at file level since we already filter the functions inside the file in the code_layout.sh
   for (const [filename, content] of Object.entries(fileChunks)) {
-    console.log(`Processing file ${filename}: ${content}`);
+    console.log(`Processing file ${filename}`);
     // skip file *.d.ts and test files
     if (filename.endsWith('.ts') && !filename.includes('test') && !filename.endsWith('.d.ts')) {
-      const maxChunkSize = 4096;
+      const maxChunkSize = 4096 * 10;
       if (content.length <= maxChunkSize) {
         try {
           const testCases = await generateUnitTests(client, modelId, content);
-          console.log(`Generated test cases for file ${filename}`);
+          console.log(`Generated test cases for function ${content}`);
           allTestCases = allTestCases.concat(testCases);
         } catch (error) {
           console.error(`Error generating test cases for file ${filename}:`, error);
