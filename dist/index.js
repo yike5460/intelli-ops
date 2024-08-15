@@ -51742,7 +51742,7 @@ async function generateUnitTests(client, modelId, sourceCode) {
         contentType: "application/json",
         body: JSON.stringify(payload),
     });
-    const timeoutMs = 10 * 1000; // 10 seconds
+    const timeoutMs = 45 * 1000; // 45 seconds considering the prompt length
     try {
         const apiResponse = await Promise.race([
             client.send(command),
@@ -51782,7 +51782,8 @@ async function runUnitTests(testCases) {
         console.log('No test cases to run');
         return;
     }
-    const testDir = path.join(__dirname, '..', 'test');
+    // note this is the temporary directory for storing the generated test cases while the actual test cases pushed to the repo are 'test/unit_tests.ts' handled the main function
+    const testDir = path.join(__dirname, '..', 'generated_tests');
     if (!fs.existsSync(testDir)) {
         fs.mkdirSync(testDir, { recursive: true });
     }
@@ -51795,7 +51796,7 @@ async function runUnitTests(testCases) {
     fs.writeFileSync(testFilePath, testFileContent);
     try {
         // log out the execution result of the test
-        (0, child_process_1.execSync)('npx jest', { stdio: 'inherit' });
+        (0, child_process_1.execSync)(`npx jest ${testFilePath}`, { stdio: 'inherit' });
         console.log('Tests passed successfully');
     }
     catch (error) {

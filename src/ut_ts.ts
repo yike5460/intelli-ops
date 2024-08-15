@@ -133,7 +133,7 @@ export async function generateUnitTests(client: BedrockRuntimeClient, modelId: s
         body: JSON.stringify(payload),
     });
 
-    const timeoutMs = 10 * 1000; // 10 seconds
+    const timeoutMs = 45 * 1000; // 45 seconds considering the prompt length
     try {
       const apiResponse = await Promise.race([
         client.send(command),
@@ -172,7 +172,8 @@ export async function runUnitTests(testCases: TestCase[]): Promise<void> {
         console.log('No test cases to run');
         return;
     }
-    const testDir = path.join(__dirname, '..', 'test');
+    // note this is the temporary directory for storing the generated test cases while the actual test cases pushed to the repo are 'test/unit_tests.ts' handled the main function
+    const testDir = path.join(__dirname, '..', 'generated_tests');
     if (!fs.existsSync(testDir)) {
         fs.mkdirSync(testDir, { recursive: true });
     }
@@ -187,7 +188,7 @@ export async function runUnitTests(testCases: TestCase[]): Promise<void> {
 
     try {
         // log out the execution result of the test
-        execSync('npx jest', { stdio: 'inherit' });
+        execSync(`npx jest ${testFilePath}`, { stdio: 'inherit' });
         console.log('Tests passed successfully');
     } catch (error) {
         console.error('Error running tests:', error);
