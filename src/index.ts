@@ -268,26 +268,26 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
   // }
   // Process each file chunk at file level since we already filter the functions inside the file in the code_layout.sh
   for (const [filename, content] of Object.entries(fileChunks)) {
-    console.log(`Processing file ${filename}`);
+    console.log(`Generating unit tests for file ${filename}`);
     // skip file *.d.ts and test files
     if (filename.endsWith('.ts') && !filename.includes('test') && !filename.endsWith('.d.ts')) {
       const maxChunkSize = 4096 * 10;
       if (content.length <= maxChunkSize) {
         try {
           const testCases = await generateUnitTests(client, modelId, content);
-          console.log(`Generated test cases for function ${content}`);
+          // console.log(`Generated test cases for function ${content}`);
           allTestCases = allTestCases.concat(testCases);
         } catch (error) {
           console.error(`Error generating test cases for file ${filename}:`, error);
         }
       } else {
-        console.log(`Skipping file ${filename} due to size limit`);
+        console.log(`Skipping file ${filename} due to size limit ${maxChunkSize} or excluded by the file name ending with test or d.ts`);
       }
     }
   }
-  console.log('All test cases:', allTestCases);
+  // console.log('All test cases:', allTestCases);
   if (allTestCases.length === 0) {
-    console.log('No test cases generated. Skipping unit tests execution and report generation.');
+    console.warn('No test cases generated. Skipping unit tests execution and report generation.');
     return;
   }
 
@@ -315,7 +315,7 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
       // Create a new file with the generated unit tests in test folder
       const unitTestsContent = allTestCases.map(tc => tc.code).join('\n\n');
       const unitTestsFileName = 'test/unit_tests.ts';
-      console.log(`Generating unit tests to PR #${pullRequest.number} on branch: ${branchName} with unit test content: ${unitTestsContent}`);
+      // console.log(`Generating unit tests to PR #${pullRequest.number} on branch: ${branchName} with unit test content: ${unitTestsContent}`);
 
       // Check if the file already exists
       let fileSha: string | undefined;
@@ -341,7 +341,7 @@ async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: str
         branch: branchName,
         sha: fileSha, // Include the sha if the file exists, undefined otherwise
       });
-      console.log(`Unit tests added to PR as ${unitTestsFileName}`);
+      // console.log(`Unit tests added to PR as ${unitTestsFileName}`);
 
     } catch (error) {
       console.error('Error occurred while pushing the changes to the PR branch', error);
@@ -485,63 +485,67 @@ Please review the provided code change and provide your feedback following the g
 `;
 
 export async function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string): Promise<string> {
+  try {
+    // seperate branch to invoke RESTFul endpoint exposed by API Gateway, if the modelId is prefixed with string like "sagemaker.<api id>.execute-api.<region>.amazonaws.com/prod"
+    if (modelId.startsWith("sagemaker.")) {
+      // invoke RESTFul endpoint e.g. curl -X POST -H "Content-Type: application/json" -d '{"prompt": "import argparse\ndef main(string: str):\n    print(string)\n    print(string[::-1])\n    if __name__ == \"__main__\":", "parameters": {"max_new_tokens": 256, "temperature": 0.1}}' https://<api id>.execute-api.<region>.amazonaws.com/prod
+      const endpoint = modelId.split("sagemaker.")[1];
 
-  // seperate branch to invoke RESTFul endpoint exposed by API Gateway, if the modelId is prefixed with string like "sagemaker.<api id>.execute-api.<region>.amazonaws.com/prod"
-  if (modelId.startsWith("sagemaker.")) {
-    // invoke RESTFul endpoint e.g. curl -X POST -H "Content-Type: application/json" -d '{"prompt": "import argparse\ndef main(string: str):\n    print(string)\n    print(string[::-1])\n    if __name__ == \"__main__\":", "parameters": {"max_new_tokens": 256, "temperature": 0.1}}' https://<api id>.execute-api.<region>.amazonaws.com/prod
-    const endpoint = modelId.split("sagemaker.")[1];
+      // invoke the RESTFul endpoint with the payload
+      const payload = {
+        prompt: payloadInput,
+        parameters: {
+          max_new_tokens: 256,
+          temperature: 0.1,
+        },
+      };
 
-    // invoke the RESTFul endpoint with the payload
+      const response = await fetch(`https://${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const responseBody = await response.json();
+      // extract the generated text from the response, the output payload should be in the format { "generated_text": "..." } using codellama model for now
+      const finalResult = (responseBody as { generated_text: string }).generated_text;
+
+      return finalResult;
+    }
+
     const payload = {
-      prompt: payloadInput,
-      parameters: {
-        max_new_tokens: 256,
-        temperature: 0.1,
-      },
+      anthropic_version: "bedrock-2023-05-31",
+      max_tokens: 4096,
+      messages: [
+        {
+          role: "user",
+          content: [{
+            type: "text",
+            text: payloadInput,
+          }],
+        },
+      ],
     };
 
-    const response = await fetch(`https://${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+    const command = new InvokeModelCommand({
+      // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+      modelId: modelId,
+      contentType: "application/json",
       body: JSON.stringify(payload),
     });
 
-    const responseBody = await response.json();
-    // extract the generated text from the response, the output payload should be in the format { "generated_text": "..." } using codellama model for now 
-    const finalResult = (responseBody as { generated_text: string }).generated_text;
+    const apiResponse = await client.send(command);
+    const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
+    const responseBody = JSON.parse(decodedResponseBody);
+    const finalResult = responseBody.content[0].text;
 
     return finalResult;
+  } catch (error) {
+    console.error('Error occurred while invoking the model', error);
+    throw error;
   }
-
-  const payload = {
-    anthropic_version: "bedrock-2023-05-31",
-    max_tokens: 4096,
-    messages: [
-      {
-        role: "user",
-        content: [{
-          type: "text",
-          text: payloadInput,
-        }],
-      },
-    ],
-  };
-
-  const command = new InvokeModelCommand({
-    // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
-    modelId: modelId,
-    contentType: "application/json",
-    body: JSON.stringify(payload),
-  });
-
-  const apiResponse = await client.send(command);
-  const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
-  const responseBody = JSON.parse(decodedResponseBody);
-  const finalResult = responseBody.content[0].text;
-
-  return finalResult;
 }
 
 async function generateCodeReviewComment(bedrockClient: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, excludePatterns: string[], reviewLevel: string): Promise<void> {
@@ -588,9 +592,9 @@ async function generateCodeReviewComment(bedrockClient: BedrockRuntimeClient, mo
       var review = await invokeModel(bedrockClient, modelId, payloadInput);  
 
       // log the generated review comments and check if it is empty
-      console.log(`Review comments ${review} generated for file: ${file.filename}`);
+      // console.log(`Review comments ${review} generated for file: ${file.filename}`);
       if (!review || review.trim() == '') {
-        console.log("No review comments generated for file: {}", file.filename);
+        console.warn(`No review comments generated for file ${file.filename}, adding default review comment`);
         // add default review comment
         review = "No review needed, LGTM!";
         continue;
@@ -604,12 +608,12 @@ async function generateCodeReviewComment(bedrockClient: BedrockRuntimeClient, mo
         });
       }
     } else {
-      console.log(`Skipping file: ${file.filename}`);
+      console.log(`Skipping file: ${file.filename} due to the file is removed or excluded explicitly`);
     }
   }
 
   if (reviewComments.length > 0) {
-    console.log('Posting code review comments to the PR with content:', reviewComments);
+    // console.log('Posting code review comments to the PR with content:', reviewComments);
     await octokit.rest.pulls.createReview({
       ...repo,
       pull_number: pullRequest.number,
