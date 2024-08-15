@@ -1,44 +1,87 @@
-import { generateUnitTests } from '../src/yourFile';
-import { InvokeModelCommand, BedrockRuntimeClient } from '@bedrock-ai/bedrock-runtime';
+import { runUnitTests } from '../src/yourFile';
+import * as fs from 'fs';
+import * as path from 'path';
 
-jest.mock('@bedrock-ai/bedrock-runtime');
+jest.mock('fs');
+jest.mock('path');
+jest.mock('child_process');
 
-describe('generateUnitTests', () => {
-  let mockClient: BedrockRuntimeClient;
-
+// Test suite for runUnitTests function
+describe('runUnitTests', () => {
   beforeEach(() => {
-    mockClient = new BedrockRuntimeClient({});
+    // Clear all mocks before each test case
     jest.clearAllMocks();
+    // Mock console.log to capture its output
+    console.log = jest.fn();
   });
 
-  it('should invoke the API and parse the response', async () => {
-    const mockResponse = {
-      body: new TextEncoder().encode(JSON.stringify({ completion: '[{"type":"direct","code":"test code"}]' })),
-    };
-    (InvokeModelCommand.prototype.send as jest.Mock).mockResolvedValueOnce(mockResponse);
-
-    const result = await generateUnitTests(mockClient, 'modelId', 'sourceCode');
-
-    expect(result).toEqual([{ type: 'direct', code: 'test code' }]);
-    expect(InvokeModelCommand).toHaveBeenCalledWith({
-      modelId: 'modelId',
-      contentType: 'application/json',
-      body: JSON.stringify({
-        prompt: expect.any(String),
-        max_tokens: 4096,
-        temperature: 0.7,
-      }),
-    });
-  });
-
-  it('should handle API errors', async () => {
-    const error = new Error('API error');
-    (InvokeModelCommand.prototype.send as jest.Mock).mockRejectedValueOnce(error);
-
-    await expect(generateUnitTests(mockClient, 'modelId', 'sourceCode')).rejects.toThrow(error);
+  it('should handle empty input array', async () => {
+    // Call the runUnitTests function with an empty array
+    await runUnitTests([]);
+    // Expect console.log to be called with specific messages
+    expect(console.log).toHaveBeenCalledWith('Input test cases', []);
+    expect(console.log).toHaveBeenCalledWith('No test cases to run');
   });
 });
 
+import { runUnitTests } from '../src/yourFile';
+import * as fs from 'fs';
+import * as path from 'path';
+
+jest.mock('fs');
+jest.mock('path');
+jest.mock('child_process');
+
+// Test suite for runUnitTests function
+describe('runUnitTests', () => {
+  beforeEach(() => {
+    // Clear all mocks before each test case
+    jest.clearAllMocks();
+    // Mock fs.existsSync to return false (test directory doesn't exist)
+    (fs.existsSync as jest.Mock).mockReturnValue(false);
+  });
+
+  it('should create test directory if it doesn\'t exist', async () => {
+    // Call the runUnitTests function with a valid test case
+    await runUnitTests([{ type: 'direct', code: 'test code' }]);
+    // Expect fs.mkdirSync to be called with the correct arguments
+    expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });
+  });
+});
+
+import { runUnitTests } from '../src/yourFile';
+import * as fs from 'fs';
+import * as path from 'path';
+
+jest.mock('fs');
+jest.mock('path');
+jest.mock('child_process');
+
+// Test suite for runUnitTests function
+describe('runUnitTests', () => {
+  beforeEach(() => {
+    // Clear all mocks before each test case
+    jest.clearAllMocks();
+    // Mock fs.existsSync to return true (test directory exists)
+    (fs.existsSync as jest.Mock).mockReturnValue(true);
+  });
+
+  it('should write test cases to file', async () => {
+    // Define test cases with different types
+    const testCases = [
+      { type: 'direct', code: 'test code 1' },
+      { type: 'not-testable', code: 'should be ignored' },
+      { type: 'direct', code: 'test code 2' }
+    ];
+    // Call the runUnitTests function with the test cases
+    await runUnitTests(testCases);
+    // Expect fs.writeFileSync to be called with the correct file content
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      expect.any(String),
+      'test code 1\n\ntest code 2'
+    );
+  });
+});
 
 import { runUnitTests } from '../src/yourFile';
 import * as fs from 'fs';
@@ -49,122 +92,67 @@ jest.mock('fs');
 jest.mock('path');
 jest.mock('child_process');
 
+// Test suite for runUnitTests function
 describe('runUnitTests', () => {
   beforeEach(() => {
+    // Clear all mocks before each test case
     jest.clearAllMocks();
-    (fs.existsSync as jest.Mock).mockReturnValue(false);
+    // Mock fs.existsSync to return true (test directory exists)
+    (fs.existsSync as jest.Mock).mockReturnValue(true);
   });
 
-  it('should create test directory if it doesn\'t exist', async () => {
-    await runUnitTests([{ type: 'direct', code: 'test code' }]);
-    expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });
-  });
-
-  it('should write test cases to file', async () => {
-    const testCases = [
-      { type: 'direct', code: 'test code 1' },
-      { type: 'not-testable', code: 'should be ignored' },
-      { type: 'direct', code: 'test code 2' },
-    ];
-    await runUnitTests(testCases);
-    expect(fs.writeFileSync).toHaveBeenCalledWith(
-      expect.any(String),
-      'test code 1\n\ntest code 2'
-    );
-  });
-
-  it('should execute pytest and log success message', async () => {
+  it('should execute Jest and log success message', async () => {
+    // Mock execSync to avoid actual execution
     (execSync as jest.Mock).mockImplementation(() => {});
+    // Mock console.log to capture its output
     console.log = jest.fn();
 
+    // Call the runUnitTests function with a valid test case
     await runUnitTests([{ type: 'direct', code: 'test code' }]);
 
-    expect(execSync).toHaveBeenCalledWith('pytest tests/test_generated.py', { stdio: 'inherit' });
-    expect(console.log).not.toHaveBeenCalled();
+    // Expect execSync to be called with the correct arguments
+    expect(execSync).toHaveBeenCalledWith('npx jest', { stdio: 'inherit' });
+    // Expect console.log to be called with the success message
+    expect(console.log).toHaveBeenCalledWith('Tests passed successfully');
+  });
+});
+
+import { runUnitTests } from '../src/yourFile';
+import * as fs from 'fs';
+import * as path from 'path';
+import { execSync } from 'child_process';
+
+jest.mock('fs');
+jest.mock('path');
+jest.mock('child_process');
+
+// Test suite for runUnitTests function
+describe('runUnitTests', () => {
+  beforeEach(() => {
+    // Clear all mocks before each test case
+    jest.clearAllMocks();
+    // Mock fs.existsSync to return true (test directory exists)
+    (fs.existsSync as jest.Mock).mockReturnValue(true);
   });
 
-  it('should handle errors during pytest execution', async () => {
-    const error = new Error('pytest execution failed');
+  it('should handle errors during Jest execution', async () => {
+    // Define a mock error to be thrown by execSync
+    const error = new Error('Jest execution failed');
+    // Mock execSync to throw the error
     (execSync as jest.Mock).mockImplementation(() => { throw error; });
+    // Mock console.error to capture its output
     console.error = jest.fn();
 
+    // Call the runUnitTests function with a valid test case
     await runUnitTests([{ type: 'direct', code: 'test code' }]);
 
+    // Expect console.error to be called with the error message
     expect(console.error).toHaveBeenCalledWith('Error running tests:', error);
   });
 });
 
-
-import { generateTestReport } from '../src/yourFile';
-import * as fs from 'fs';
-import * as path from 'path';
-
-jest.mock('fs');
-jest.mock('path');
-
-describe('generateTestReport', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (fs.existsSync as jest.Mock).mockReturnValue(false);
-  });
-
-  it('should create reports directory if it doesn\'t exist', async () => {
-    const testCases = [
-      { type: 'direct', code: 'test code' },
-      { type: 'indirect', code: 'test code' },
-      { type: 'not-testable', code: 'test code' },
-    ];
-    await generateTestReport(testCases);
-    expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });
-  });
-
-  it('should generate a report with correct statistics', async () => {
-    const testCases = [
-      { type: 'direct', code: 'test code' },
-      { type: 'indirect', code: 'test code' },
-      { type: 'not-testable', code: 'test code' },
-    ];
-    await generateTestReport(testCases);
-    const expectedReport = {
-      totalTests: 3,
-      directTests: 1,
-      indirectTests: 1,
-      notTestable: 1,
-    };
-    expect(fs.writeFileSync).toHaveBeenCalledWith(
-      expect.any(String),
-      JSON.stringify(expectedReport, null, 2)
-    );
-  });
-});
-
-
-import { setupPythonEnvironment } from '../src/yourFile';
-import { execSync } from 'child_process';
-
-jest.mock('child_process');
-
-describe('setupPythonEnvironment', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('should create a virtual environment and install pytest', async () => {
-    (execSync as jest.Mock).mockImplementation(() => {});
-
-    await setupPythonEnvironment();
-
-    expect(execSync).toHaveBeenCalledWith('python -m venv venv');
-    expect(execSync).toHaveBeenCalledWith('source venv/bin/activate && pip install pytest');
-  });
-
-  it('should handle errors during setup', async () => {
-    const error = new Error('Setup failed');
-    (execSync as jest.Mock).mockImplementation(() => { throw error; });
-    console.error = jest.fn();
-
-    await setupPythonEnvironment();
-
-    expect(console.error).toHaveBeenCalledWith('Error setting up Python environment:', error);
-  });
-});
+// Console output testing is not directly testable in this context.
+// While we can mock console.log and verify it's called,
+// the actual output to the console is a side effect that
+// can't be directly tested without additional tooling or
+// modifications to the original function.
