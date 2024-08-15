@@ -51654,37 +51654,72 @@ async function generateUnitTests(client, modelId, sourceCode) {
         "code": "The actual test code"
     }
     
-    Here are a few examples of the expected output format:
-    
+    Here are a few examples of the expected output for the given source code:
+    <source code example>
+    export async function runUnitTests(testCases: TestCase[]): Promise<void> {
+      if (!Array.isArray(testCases) || testCases.length === 0) {
+          console.log('Input test cases', testCases);
+          console.log('No test cases to run');
+          return;
+      }
+      const testDir = path.join(__dirname, '..', 'test');
+      if (!fs.existsSync(testDir)) {
+          fs.mkdirSync(testDir, { recursive: true });
+      }
+      console.log('Writing test cases to:', testDir, testCases);
+      const testFilePath = path.join(testDir, 'generated.test.ts');
+      const testFileContent = testCases
+          .filter(tc => tc.type !== 'not-testable')
+          .map(tc => tc.code)
+          .join('\n\n');
+  
+      fs.writeFileSync(testFilePath, testFileContent);
+  
+      try {
+          // log out the execution result of the test
+          execSync('npx jest', { stdio: 'inherit' });
+          console.log('Tests passed successfully');
+      } catch (error) {
+          console.error('Error running tests:', error);
+      }
+    }
+    </source code example>
+    <unit test examples>
     [
       {
-        "name": "Test add function with positive numbers",
+        "name": "Test input validation with empty array",
         "type": "direct",
-        "code": "test('add function with positive numbers', () => { expect(add(2, 3)).toBe(5); });"
+        "code": "import { runUnitTests } from '../src/yourFile';\nimport * as fs from 'fs';\nimport * as path from 'path';\n\njest.mock('fs');\njest.mock('path');\njest.mock('child_process');\n\ndescribe('runUnitTests', () => {\n  beforeEach(() => {\n    jest.clearAllMocks();\n    console.log = jest.fn();\n  });\n\n  it('should handle empty input array', async () => {\n    await runUnitTests([]);\n    expect(console.log).toHaveBeenCalledWith('Input test cases', []);\n    expect(console.log).toHaveBeenCalledWith('No test cases to run');\n  });\n});"
       },
       {
-        "name": "Test subtract function with negative result",
+        "name": "Test directory creation",
         "type": "direct",
-        "code": "test('subtract function with negative result', () => { expect(subtract(5, 10)).toBe(-5); });"
+        "code": "import { runUnitTests } from '../src/yourFile';\nimport * as fs from 'fs';\nimport * as path from 'path';\n\njest.mock('fs');\njest.mock('path');\njest.mock('child_process');\n\ndescribe('runUnitTests', () => {\n  beforeEach(() => {\n    jest.clearAllMocks();\n    (fs.existsSync as jest.Mock).mockReturnValue(false);\n  });\n\n  it('should create test directory if it doesn\\'t exist', async () => {\n    await runUnitTests([{ type: 'direct', code: 'test code' }]);\n    expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });\n  });\n});"
       },
       {
-        "name": "Test multiply function with zero",
+        "name": "Test file writing",
         "type": "direct",
-        "code": "test('multiply function with zero', () => { expect(multiply(7, 0)).toBe(0); });"
+        "code": "import { runUnitTests } from '../src/yourFile';\nimport * as fs from 'fs';\nimport * as path from 'path';\n\njest.mock('fs');\njest.mock('path');\njest.mock('child_process');\n\ndescribe('runUnitTests', () => {\n  beforeEach(() => {\n    jest.clearAllMocks();\n    (fs.existsSync as jest.Mock).mockReturnValue(true);\n  });\n\n  it('should write test cases to file', async () => {\n    const testCases = [\n      { type: 'direct', code: 'test code 1' },\n      { type: 'not-testable', code: 'should be ignored' },\n      { type: 'direct', code: 'test code 2' }\n    ];\n    await runUnitTests(testCases);\n    expect(fs.writeFileSync).toHaveBeenCalledWith(\n      expect.any(String),\n      'test code 1\\n\\ntest code 2'\n    );\n  });\n});"
       },
       {
-        "name": "Test private helper method indirectly",
+        "name": "Test Jest execution",
         "type": "indirect",
-        "code": "test('private helper method indirectly', () => { const result = publicMethodUsingPrivateHelper(5); expect(result).toBe(10); });"
+        "code": "import { runUnitTests } from '../src/yourFile';\nimport * as fs from 'fs';\nimport * as path from 'path';\nimport { execSync } from 'child_process';\n\njest.mock('fs');\njest.mock('path');\njest.mock('child_process');\n\ndescribe('runUnitTests', () => {\n  beforeEach(() => {\n    jest.clearAllMocks();\n    (fs.existsSync as jest.Mock).mockReturnValue(true);\n  });\n\n  it('should execute Jest and log success message', async () => {\n    (execSync as jest.Mock).mockImplementation(() => {});\n    console.log = jest.fn();\n\n    await runUnitTests([{ type: 'direct', code: 'test code' }]);\n\n    expect(execSync).toHaveBeenCalledWith('npx jest', { stdio: 'inherit' });\n    expect(console.log).toHaveBeenCalledWith('Tests passed successfully');\n  });\n});"
       },
       {
-        "name": "Main function",
+        "name": "Test error handling",
+        "type": "indirect",
+        "code": "import { runUnitTests } from '../src/yourFile';\nimport * as fs from 'fs';\nimport * as path from 'path';\nimport { execSync } from 'child_process';\n\njest.mock('fs');\njest.mock('path');\njest.mock('child_process');\n\ndescribe('runUnitTests', () => {\n  beforeEach(() => {\n    jest.clearAllMocks();\n    (fs.existsSync as jest.Mock).mockReturnValue(true);\n  });\n\n  it('should handle errors during Jest execution', async () => {\n    const error = new Error('Jest execution failed');\n    (execSync as jest.Mock).mockImplementation(() => { throw error; });\n    console.error = jest.fn();\n\n    await runUnitTests([{ type: 'direct', code: 'test code' }]);\n\n    expect(console.error).toHaveBeenCalledWith('Error running tests:', error);\n  });\n});"
+      },
+      {
+        "name": "Test console output",
         "type": "not-testable",
-        "code": ""
+        "code": "// Console output testing is not directly testable in this context.\n// While we can mock console.log and verify it's called,\n// the actual output to the console is a side effect that\n// can't be directly tested without additional tooling or\n// modifications to the original function."
       }
-    ]
-    
+    ]    
+    </unit test examples>
     Ensure that your response is a valid JSON array containing objects with the specified structure. Do not include any explanatory text outside of the JSON array.
+    Assess whether the LLM’s output is fully executable and correctly written to validate the source code. If the LLM's output is correct, return the code verbatim as it was, if not, fix the code and return the corrected version that: 1. fully executable; 2. commented thoroughly enough for a beginner to understand; 3. follows the best practices of the language.
     `;
     console.log('Generating unit tests with total prompt length:', prompt.length + sourceCode.length);
     // exact the same implementation as function invokeModel in index.ts

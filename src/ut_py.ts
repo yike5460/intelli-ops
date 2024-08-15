@@ -27,6 +27,8 @@ export async function generateUnitTests(client: BedrockRuntimeClient, modelId: s
         "type": "direct" | "indirect" | "not-testable",
         "code": "The actual test code"
     }
+
+    Assess whether the LLM’s output is fully executable and correctly written to validate the source code. If the LLM's output is correct, return the code verbatim as it was, if not, fix the code and return the corrected version that: 1. fully executable; 2. commented thorougly enough for a beginner to understand; 3. follows the best practices of the language.
     `;
 
     const command = new InvokeModelCommand({
