@@ -1,158 +1,73 @@
-import { runUnitTests } from '../src/yourFile';
-import * as fs from 'fs';
-import * as path from 'path';
+import { generateUnitTests } from '../src/yourFile';
 
-jest.mock('fs');
-jest.mock('path');
-jest.mock('child_process');
-
-// Test suite for runUnitTests function
-describe('runUnitTests', () => {
-  beforeEach(() => {
-    // Clear all mocks before each test case
-    jest.clearAllMocks();
-    // Mock console.log to capture its output
-    console.log = jest.fn();
-  });
-
-  it('should handle empty input array', async () => {
-    // Call the runUnitTests function with an empty array
-    await runUnitTests([]);
-    // Expect console.log to be called with specific messages
-    expect(console.log).toHaveBeenCalledWith('Input test cases', []);
-    expect(console.log).toHaveBeenCalledWith('No test cases to run');
+describe('generateUnitTests', () => {
+  it('should generate unit tests', async () => {
+    const repoFullName = 'org/repo';
+    const branch = 'main';
+    const filePath = 'src/file.ts';
+    const result = await generateUnitTests(repoFullName, branch, filePath);
+    expect(result).toBe('Generated unit tests...');
   });
 });
 
-import { runUnitTests } from '../src/yourFile';
-import * as fs from 'fs';
-import * as path from 'path';
+import { modularizeFunction } from '../src/yourFile';
 
-jest.mock('fs');
-jest.mock('path');
-jest.mock('child_process');
-
-// Test suite for runUnitTests function
-describe('runUnitTests', () => {
-  beforeEach(() => {
-    // Clear all mocks before each test case
-    jest.clearAllMocks();
-    // Mock fs.existsSync to return false (test directory doesn't exist)
-    (fs.existsSync as jest.Mock).mockReturnValue(false);
-  });
-
-  it('should create test directory if it doesn\'t exist', async () => {
-    // Call the runUnitTests function with a valid test case
-    await runUnitTests([{ type: 'direct', code: 'test code' }]);
-    // Expect fs.mkdirSync to be called with the correct arguments
-    expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });
+describe('modularizeFunction', () => {
+  it('should modularize function', async () => {
+    const repoFullName = 'org/repo';
+    const branch = 'main';
+    const filePath = 'src/file.ts';
+    const line = 10;
+    const result = await modularizeFunction(repoFullName, branch, filePath, line);
+    expect(result).toBe('Modularized function...');
   });
 });
 
-import { runUnitTests } from '../src/yourFile';
-import * as fs from 'fs';
-import * as path from 'path';
+import { generateStats } from '../src/yourFile';
 
-jest.mock('fs');
-jest.mock('path');
-jest.mock('child_process');
-
-// Test suite for runUnitTests function
-describe('runUnitTests', () => {
-  beforeEach(() => {
-    // Clear all mocks before each test case
-    jest.clearAllMocks();
-    // Mock fs.existsSync to return true (test directory exists)
-    (fs.existsSync as jest.Mock).mockReturnValue(true);
-  });
-
-  it('should write test cases to file', async () => {
-    // Define test cases with different types
-    const testCases = [
-      { type: 'direct', code: 'test code 1' },
-      { type: 'not-testable', code: 'should be ignored' },
-      { type: 'direct', code: 'test code 2' }
-    ];
-    // Call the runUnitTests function with the test cases
-    await runUnitTests(testCases);
-    // Expect fs.writeFileSync to be called with the correct file content
-    expect(fs.writeFileSync).toHaveBeenCalledWith(
-      expect.any(String),
-      'test code 1\n\ntest code 2'
-    );
+describe('generateStats', () => {
+  it('should generate repository stats', async () => {
+    const repoFullName = 'org/repo';
+    const result = await generateStats(repoFullName);
+    expect(result).toBe('Generated stats...');
   });
 });
 
-import { runUnitTests } from '../src/yourFile';
-import * as fs from 'fs';
-import * as path from 'path';
-import { execSync } from 'child_process';
+import { findConsoleLogStatements } from '../src/yourFile';
 
-jest.mock('fs');
-jest.mock('path');
-jest.mock('child_process');
-
-// Test suite for runUnitTests function
-describe('runUnitTests', () => {
-  beforeEach(() => {
-    // Clear all mocks before each test case
-    jest.clearAllMocks();
-    // Mock fs.existsSync to return true (test directory exists)
-    (fs.existsSync as jest.Mock).mockReturnValue(true);
-  });
-
-  it('should execute Jest and log success message', async () => {
-    // Mock execSync to avoid actual execution
-    (execSync as jest.Mock).mockImplementation(() => {});
-    // Mock console.log to capture its output
-    console.log = jest.fn();
-
-    // Call the runUnitTests function with a valid test case
-    await runUnitTests([{ type: 'direct', code: 'test code' }]);
-
-    // Expect execSync to be called with the correct arguments
-    expect(execSync).toHaveBeenCalledWith('npx jest', { stdio: 'inherit' });
-    // Expect console.log to be called with the success message
-    expect(console.log).toHaveBeenCalledWith('Tests passed successfully');
+describe('findConsoleLogStatements', () => {
+  it('should find console.log statements', async () => {
+    const repoFullName = 'org/repo';
+    const branch = 'main';
+    const result = await findConsoleLogStatements(repoFullName, branch);
+    expect(result).toBe('Found console.log statements...');
   });
 });
 
-import { runUnitTests } from '../src/yourFile';
-import * as fs from 'fs';
-import * as path from 'path';
-import { execSync } from 'child_process';
+import { generateClassDiagram } from '../src/yourFile';
 
-jest.mock('fs');
-jest.mock('path');
-jest.mock('child_process');
-
-// Test suite for runUnitTests function
-describe('runUnitTests', () => {
-  beforeEach(() => {
-    // Clear all mocks before each test case
-    jest.clearAllMocks();
-    // Mock fs.existsSync to return true (test directory exists)
-    (fs.existsSync as jest.Mock).mockReturnValue(true);
-  });
-
-  it('should handle errors during Jest execution', async () => {
-    // Define a mock error to be thrown by execSync
-    const error = new Error('Jest execution failed');
-    // Mock execSync to throw the error
-    (execSync as jest.Mock).mockImplementation(() => { throw error; });
-    // Mock console.error to capture its output
-    console.error = jest.fn();
-
-    // Call the runUnitTests function with a valid test case
-    await runUnitTests([{ type: 'direct', code: 'test code' }]);
-
-    // Expect console.error to be called with the error message
-    expect(console.error).toHaveBeenCalledWith('Error running tests:', error);
+describe('generateClassDiagram', () => {
+  it('should generate class diagram', async () => {
+    const repoFullName = 'org/repo';
+    const branch = 'main';
+    const filePath = 'src/file.ts';
+    const result = await generateClassDiagram(repoFullName, branch, filePath);
+    expect(result).toBe('Generated class diagram...');
   });
 });
 
-// Console output testing is not directly testable in this context.
-// While we can mock console.log and verify it's called,
-// the actual output to the console is a side effect that
-// can't be directly tested without additional tooling or
-// modifications to the original function.
+import { debugBotConfig } from '../src/yourFile';
+
+describe('debugBotConfig', () => {
+  it('should debug CodeRabbit configuration', async () => {
+    const repoFullName = 'org/repo';
+    const branch = 'main';
+    const result = await debugBotConfig(repoFullName, branch);
+    expect(result).toBe('Debug information for bot configuration...');
+  });
+});
+
+// The provided source code does not contain any methods that are directly testable.
+// All methods are asynchronous and return promises, making it difficult to test their
+// internal logic directly. However, we can indirectly test them by verifying their
+// expected output or behavior based on the resolved promises.
