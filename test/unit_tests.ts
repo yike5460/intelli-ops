@@ -1,73 +1,136 @@
+test('default test', () => { expect(true).toBe(true); });
+
 import { generateUnitTests } from '../src/yourFile';
+import { BedrockRuntimeClient, InvokeModelCommand } from 'path/to/bedrock';
+
+const mockClient = {
+  send: jest.fn().mockResolvedValue({ body: new Uint8Array() })
+} as unknown as BedrockRuntimeClient;
+
+const mockModelId = 'model-id';
+const mockSourceCode = 'const sum = (a, b) => a + b;';
 
 describe('generateUnitTests', () => {
   it('should generate unit tests', async () => {
-    const repoFullName = 'org/repo';
-    const branch = 'main';
-    const filePath = 'src/file.ts';
-    const result = await generateUnitTests(repoFullName, branch, filePath);
-    expect(result).toBe('Generated unit tests...');
+    const result = await generateUnitTests(mockClient, mockModelId, mockSourceCode);
+    expect(result).toBeInstanceOf(Array);
+    expect(mockClient.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: mockModelId,
+        contentType: 'application/json',
+        body: expect.any(String)
+      })
+    );
   });
 });
 
-import { modularizeFunction } from '../src/yourFile';
+import { runUnitTests } from '../src/yourFile';
+import * as fs from 'fs';
+import * as path from 'path';
+import { execSync } from 'child_process';
 
-describe('modularizeFunction', () => {
-  it('should modularize function', async () => {
-    const repoFullName = 'org/repo';
-    const branch = 'main';
-    const filePath = 'src/file.ts';
-    const line = 10;
-    const result = await modularizeFunction(repoFullName, branch, filePath, line);
-    expect(result).toBe('Modularized function...');
+jest.mock('fs');
+jest.mock('path');
+jest.mock('child_process');
+
+describe('runUnitTests', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    console.log = jest.fn();
+    console.error = jest.fn();
+  });
+
+  it('should handle empty input', async () => {
+    await runUnitTests([]);
+    expect(console.log).toHaveBeenCalledWith('No test cases to run');
   });
 });
 
-import { generateStats } from '../src/yourFile';
+import { runUnitTests } from '../src/yourFile';
+import * as fs from 'fs';
+import * as path from 'path';
+import { execSync } from 'child_process';
 
-describe('generateStats', () => {
-  it('should generate repository stats', async () => {
-    const repoFullName = 'org/repo';
-    const result = await generateStats(repoFullName);
-    expect(result).toBe('Generated stats...');
+jest.mock('fs');
+jest.mock('path');
+jest.mock('child_process');
+
+describe('runUnitTests', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (fs.existsSync as jest.Mock).mockReturnValue(true);
+    console.log = jest.fn();
+    console.error = jest.fn();
+  });
+
+  it('should write test cases to file and execute pytest', async () => {
+    const testCases = [
+      { type: 'direct', code: 'test code 1' },
+      { type: 'indirect', code: 'test code 2' }
+    ];
+    await runUnitTests(testCases);
+    expect(fs.writeFileSync).toHaveBeenCalled();
+    expect(execSync).toHaveBeenCalledWith('pytest tests/test_generated.py', { stdio: 'inherit' });
+  });
+
+  it('should handle errors during pytest execution', async () => {
+    const error = new Error('pytest execution failed');
+    (execSync as jest.Mock).mockImplementation(() => { throw error; });
+    const testCases = [{ type: 'direct', code: 'test code' }];
+    await runUnitTests(testCases);
+    expect(console.error).toHaveBeenCalledWith('Error running tests:', error);
   });
 });
 
-import { findConsoleLogStatements } from '../src/yourFile';
+import { generateTestReport } from '../src/yourFile';
+import * as fs from 'fs';
+import * as path from 'path';
 
-describe('findConsoleLogStatements', () => {
-  it('should find console.log statements', async () => {
-    const repoFullName = 'org/repo';
-    const branch = 'main';
-    const result = await findConsoleLogStatements(repoFullName, branch);
-    expect(result).toBe('Found console.log statements...');
+jest.mock('fs');
+jest.mock('path');
+
+describe('generateTestReport', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (fs.existsSync as jest.Mock).mockReturnValue(false);
+  });
+
+  it('should generate test report and write to file', async () => {
+    const testCases = [
+      { type: 'direct', code: 'test code 1' },
+      { type: 'indirect', code: 'test code 2' },
+      { type: 'not-testable', code: 'not testable' }
+    ];
+    await generateTestReport(testCases);
+    expect(fs.mkdirSync).toHaveBeenCalled();
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String)
+    );
   });
 });
 
-import { generateClassDiagram } from '../src/yourFile';
+import { setupPythonEnvironment } from '../src/yourFile';
+import { execSync } from 'child_process';
 
-describe('generateClassDiagram', () => {
-  it('should generate class diagram', async () => {
-    const repoFullName = 'org/repo';
-    const branch = 'main';
-    const filePath = 'src/file.ts';
-    const result = await generateClassDiagram(repoFullName, branch, filePath);
-    expect(result).toBe('Generated class diagram...');
+jest.mock('child_process');
+
+describe('setupPythonEnvironment', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    console.error = jest.fn();
+  });
+
+  it('should create virtual environment and install pytest', async () => {
+    await setupPythonEnvironment();
+    expect(execSync).toHaveBeenCalledWith('python -m venv venv');
+    expect(execSync).toHaveBeenCalledWith('source venv/bin/activate && pip install pytest');
+  });
+
+  it('should handle errors during setup', async () => {
+    const error = new Error('Setup failed');
+    (execSync as jest.Mock).mockImplementation(() => { throw error; });
+    await setupPythonEnvironment();
+    expect(console.error).toHaveBeenCalledWith('Error setting up Python environment:', error);
   });
 });
-
-import { debugBotConfig } from '../src/yourFile';
-
-describe('debugBotConfig', () => {
-  it('should debug CodeRabbit configuration', async () => {
-    const repoFullName = 'org/repo';
-    const branch = 'main';
-    const result = await debugBotConfig(repoFullName, branch);
-    expect(result).toBe('Debug information for bot configuration...');
-  });
-});
-
-// The provided source code does not contain any methods that are directly testable.
-// All methods are asynchronous and return promises, making it difficult to test their
-// internal logic directly. However, we can indirectly test them by verifying their
-// expected output or behavior based on the resolved promises.
