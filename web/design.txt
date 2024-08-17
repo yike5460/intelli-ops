@@ -1,0 +1,2 @@
+Write a landing page using react and tailwindcss, refer the layout and design of this website: https://coderabbit.ai/.
+Host the website on vercel and deploy it.
