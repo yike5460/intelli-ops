@@ -1,15 +1,19 @@
 import React from 'react';
-import Header from './components/Header.jsx';
-import Hero from './components/Hero.jsx';
-import Features from './components/Features.jsx';
-import Footer from './components/Footer.jsx';
+import Header from './components/Header';
+import Hero from './components/Hero';
+import Features from './components/Features';
+import Pricing from './components/Pricing';
+import FAQ from './components/FAQ';
+import Footer from './components/Footer';
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-white">
       <Header />
       <Hero />
       <Features />
+      <Pricing />
+      <FAQ />
       <Footer />
     </div>
   );

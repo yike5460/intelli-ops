@@ -14,3 +14,4 @@ sample_models
 *.context.json
 node_modules
 build
+.vercel
