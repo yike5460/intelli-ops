@@ -1,7 +1,7 @@
 import express from 'express';
 import { Octokit } from '@octokit/rest';
 import { WebhookEvent } from '@octokit/webhooks-types';
-import { handleReviewComment, handlePRComment, handlePullRequest, handleIssueComment } from './handler'
+import { handleReviewComment, handlePullRequest, handleIssueComment } from './handler'
 
 const app = express();
 app.use(express.json());
@@ -13,7 +13,7 @@ console.log("GitHub App Token is set:", !!process.env.GITHUB_APP_TOKEN);
 app.post('/webhook', async (req, res) => {
   const event = req.body as WebhookEvent;
   const githubEvent = req.headers["x-github-event"] as string;
-
+  console.log('githubEvent', githubEvent)
   try {
     switch (githubEvent) {
       case "pull_request_review_comment":
@@ -23,11 +23,10 @@ app.post('/webhook', async (req, res) => {
         if ('action' in event) {
           if (event.action === "opened" || event.action === "synchronize") {
             await handlePullRequest(event, octokit);
-          } else if (event.action === "created" && 'comment' in event) {
-            await handlePRComment(event, octokit);
           }
         }
         break;
+      // Note a new comment in PR will trigger the issue comment event
       case "issue_comment":
         if ('action' in event && (event.action === "created" || event.action === "edited")) {
           await handleIssueComment(event, octokit);

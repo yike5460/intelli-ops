@@ -54,8 +54,8 @@ jobs:
         role-to-assume: arn:aws:iam::705247044519:role/GitHub-Workflow-OIDC-Role-bHb9ZhppJUj8
         aws-region: us-east-1
 
-    - name: Code review using AWS Bedrock
-      uses: yike5460/intelli-ops@v0.0.61
+    - name: Intelligent GitHub Actions
+      uses: yike5460/intelli-ops@stable
       with:
         # Automatic Provision: The GITHUB_TOKEN is automatically created and provided by GitHub for each workflow run. You don't need to manually create or store this token as a secret.
         github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -63,7 +63,7 @@ jobs:
         model-id: anthropic.claude-3-sonnet-20240229-v1:0
         exclude-files: '*.md,*.json'
         review-level: 'concise'
-        code-review: 'false'
+        code-review: 'true'
         generate-pr-description: 'true'
         generate-unit-test-suite: 'true'
       env:

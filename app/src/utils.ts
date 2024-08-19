@@ -1,15 +1,100 @@
 import { Octokit } from '@octokit/rest';
+import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 
 const octokit = new Octokit({ auth: process.env.GITHUB_APP_TOKEN });
+const bedrockClient = new BedrockRuntimeClient({ region: 'us-east-1' });
+const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0'; // Replace with your desired model ID
+const unitTestPrompt = "Generate unit tests for the following code: {{SOURCE_CODE}}";
 
-export async function generateUnitTests(repoFullName: string, branch: string, filePath: string): Promise<string> {
-  // Implement unit test generation logic here
-  return "Generated unit tests...";
+export async function generateUnitTestsPerFile(repoFullName: string, branch: string, filePath: string): Promise<string | undefined> {
+  try {
+    const [owner, repo] = repoFullName.split('/');
+    const { data: fileContent } = await octokit.repos.getContent({
+      owner,
+      repo,
+      path: filePath,
+      ref: branch
+    });
+
+    if ('content' in fileContent && typeof fileContent.content === 'string') {
+      const decodedContent = Buffer.from(fileContent.content, 'base64').toString('utf-8');
+      const prompt = unitTestPrompt.replace('{{SOURCE_CODE}}', decodedContent);
+      const payload = {
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: [{
+              type: "text",
+              text: prompt,
+            }],
+          },
+        ],
+      };
+
+      const command = new InvokeModelCommand({
+          // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+          modelId: modelId,
+          contentType: "application/json",
+          body: JSON.stringify(payload),
+      });
+
+      // const timeoutMs = 45 * 1000; // 45 seconds considering the prompt length
+      try {
+        const apiResponse = await bedrockClient.send(command)
+        if (apiResponse === undefined) {
+          console.log('Request timed out, returning fake response');
+          // Return default or fake response
+          return "An error occurred while generating unit tests.";
+        }
+        const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
+        const responseBody = JSON.parse(decodedResponseBody);
+        const finalResult = responseBody.content[0].text;
+        return finalResult;
+      } catch (error) {
+        console.error('Error generating unit tests:', error);
+        return "An error occurred while generating unit tests.";
+      }
+    }
+  } catch (error) {
+    console.error('Error generating unit tests:', error);
+    return "An error occurred while generating unit tests.";
+  }
 }
 
 export async function modularizeFunction(repoFullName: string, branch: string, filePath: string, line: number): Promise<string> {
-  // Implement function modularization logic here
-  return "Modularized function...";
+  try {
+    const [owner, repo] = repoFullName.split('/');
+    const { data: fileContent } = await octokit.repos.getContent({
+      owner,
+      repo,
+      path: filePath,
+      ref: branch
+    });
+
+    if ('content' in fileContent && typeof fileContent.content === 'string') {
+      const decodedContent = Buffer.from(fileContent.content, 'base64').toString('utf-8');
+      const lines = decodedContent.split('\n');
+      // This is a simplified approach and should be replaced with more sophisticated logic
+      const functionLines = lines.slice(line - 1);
+      const modularizedFunction = `
+// Modularized function
+function modularizedFunction() {
+  ${functionLines.join('\n  ')}
+}
+
+// Usage example
+modularizedFunction();
+`;
+      return modularizedFunction;
+    } else {
+      return "Unable to modularize function: File content not available.";
+    }
+  } catch (error) {
+    console.error('Error modularizing function:', error);
+    return "An error occurred while modularizing the function.";
+  }
 }
 
 export async function generateStats(repoFullName: string): Promise<string> {
@@ -66,17 +151,115 @@ These stats provide an overview of the repository's activity, codebase, and comm
   }
 }
 
-export async function findConsoleLogStatements(repoFullName: string, branch: string): Promise<string> {
-  // Implement console.log statement finding logic here
-  return "Found console.log statements...";
+export async function findConsoleLogStatements(repoFullName: string): Promise<string> {
+  try {
+    const [owner, repo] = repoFullName.split('/');
+
+    // Get the default branch
+    const { data: repoData } = await octokit.repos.get({ owner, repo });
+    const defaultBranch = repoData.default_branch;
+
+    // Search for console.log statements in the repository
+    const { data: searchResult } = await octokit.search.code({
+      q: `repo:${repoFullName} console.log`,
+      per_page: 100 // Adjust this value based on your needs
+    });
+
+    if (searchResult.total_count === 0) {
+      return "No console.log statements found in the repository.";
+    }
+
+    let consoleLogStatements = "Found console.log statements:\n\n";
+
+    for (const item of searchResult.items) {
+      try {
+        const { data: fileContent } = await octokit.repos.getContent({
+          owner,
+          repo,
+          path: item.path,
+          ref: defaultBranch // Use the default branch instead of a specific commit SHA
+        });
+
+        if ('content' in fileContent && typeof fileContent.content === 'string') {
+          const decodedContent = Buffer.from(fileContent.content, 'base64').toString('utf-8');
+          const lines = decodedContent.split('\n');
+          const consoleLogLines = lines.filter(line => line.includes('console.log'));
+
+          consoleLogStatements += `File: ${item.path}\n`;
+          consoleLogLines.forEach(line => {
+            consoleLogStatements += `${line.trim()}\n`;
+          });
+          consoleLogStatements += '\n';
+        }
+      } catch (contentError) {
+        console.error(`Error fetching content for ${item.path}:`, contentError);
+        consoleLogStatements += `Unable to fetch content for ${item.path}\n\n`;
+      }
+    }
+
+    return consoleLogStatements;
+  } catch (error) {
+    console.error('Error finding console.log statements:', error);
+    return 'An error occurred while searching for console.log statements.';
+  }
 }
 
-export async function generateClassDiagram(repoFullName: string, branch: string, filePath: string): Promise<string> {
-  // Implement class diagram generation logic here
-  return "Generated class diagram...";
+export async function generateClassDiagram(repoFullName: string, packagePath: string): Promise<string> {
+  try {
+    const [owner, repo] = repoFullName.split('/');
+    const { data: contents } = await octokit.repos.getContent({
+      owner,
+      repo,
+      path: packagePath
+    });
+
+    if (Array.isArray(contents)) {
+      let classDiagram = "```mermaid\nclassDiagram\n";
+      for (const file of contents) {
+        if (file.type === 'file' && file.name.endsWith('.ts')) {
+          const { data: fileContent } = await octokit.repos.getContent({
+            owner,
+            repo,
+            path: file.path
+          });
+          if ('content' in fileContent && typeof fileContent.content === 'string') {
+            const decodedContent = Buffer.from(fileContent.content, 'base64').toString('utf-8');
+            // This is a simplified approach to extract class names
+            const classMatch = decodedContent.match(/class\s+(\w+)/);
+            if (classMatch) {
+              classDiagram += `  class ${classMatch[1]}\n`;
+            }
+          }
+        }
+      }
+      classDiagram += "```";
+      return classDiagram;
+    } else {
+      return "Unable to generate class diagram: Package path is not a directory.";
+    }
+  } catch (error) {
+    console.error('Error generating class diagram:', error);
+    return "An error occurred while generating the class diagram.";
+  }
 }
 
-export async function debugBotConfig(repoFullName: string, branch: string): Promise<string> {
-  // Implement CodeRabbit configuration debugging logic here
-  return "Debug information for bot configuration...";
+export async function debugBotConfig(repoFullName: string): Promise<string> {
+  try {
+    const [owner, repo] = repoFullName.split('/');
+    const { data: content } = await octokit.repos.getContent({
+      owner,
+      repo,
+      path: '.github/intellibot.yml'
+    });
+
+    if ('content' in content && typeof content.content === 'string') {
+      const configContent = Buffer.from(content.content, 'base64').toString('utf-8');
+      return `IntelliBot Configuration:\n\n${configContent}`;
+    } else {
+      return "IntelliBot configuration file not found.";
+    }
+  } catch (error) {
+    console.error('Error debugging bot config:', error);
+    return "An error occurred while debugging the IntelliBot configuration.";
+  }
 }

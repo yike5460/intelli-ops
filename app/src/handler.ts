@@ -1,10 +1,65 @@
 import { Octokit } from '@octokit/rest';
 import { WebhookEvent } from '@octokit/webhooks-types';
-import { generateUnitTests, modularizeFunction, generateStats, findConsoleLogStatements, generateClassDiagram, debugBotConfig } from './utils';
+import { generateUnitTestsPerFile, modularizeFunction, generateStats, findConsoleLogStatements, generateClassDiagram, debugBotConfig } from './utils';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 
 const bedrockClient = new BedrockRuntimeClient({ region: 'us-east-1' });
 const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0'; // Replace with your desired model ID
+const intentionPrompt = `
+Task context: You are an AI assistant for a GitHub repository, designed to help users with various repository-related tasks.
+
+Tone context: Maintain a helpful and professional tone, focusing on accurately classifying user queries.
+
+Background data: You have access to repository statistics, code analysis tools, and configuration files.
+
+Detailed task description & rules:
+- Classify the user's query into one of the predefined categories.
+- If the query doesn't fit any category, classify it as "Other (general query)".
+- Consider the context of a GitHub repository when interpreting queries.
+- Do not attempt to execute any actions; your task is solely classification.
+
+Categories:
+1. Generate repository stats
+2. Show console.log statements
+3. Generate unit tests
+4. Generate class diagram and README
+5. Debug IntelliBot configuration
+6. Other (general query)
+
+Examples:
+<example>
+User: Can you show me some interesting stats about this repo?
+Classification: Generate repository stats
+
+User: I need to see all console.log statements in the codebase
+Classification: Show console.log statements
+
+User: Generate unit tests for the utils.ts file
+Classification: Generate unit tests
+
+User: Create a class diagram for the src folder and include a README
+Classification: Generate class diagram and README
+
+User: Help me debug the IntelliBot config file
+Classification: Debug IntelliBot configuration
+
+User: What's the best way to optimize this function?
+Classification: Other (general query)
+</example>
+
+Immediate task description: Classify the following user query into one of the predefined categories.
+
+User query: "{{USER_QUERY}}"
+
+Think step by step:
+1. Read the user query carefully.
+2. Consider the context of a GitHub repository.
+3. Compare the query to the predefined categories and examples.
+4. Choose the most appropriate category.
+
+Output formatting: Respond with only the category name, nothing else.
+
+Classification:`;
 
 export async function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string): Promise<string> {
   try {
@@ -56,7 +111,7 @@ export async function handleReviewComment(event: WebhookEvent, octokit: Octokit)
         body: `Thank you for pushing the fix. I'll review the changes in commit ${commitId}.`
       });
     } else if (commentBody.includes('generate unit testing code for this file')) {
-      const unitTests = await generateUnitTests(repository.full_name, pull_request.head.ref, comment.path);
+      const unitTests = await generateUnitTestsPerFile(repository.full_name, pull_request.head.ref, comment.path);
       await octokit.pulls.createReplyForReviewComment({
         owner: repository.owner.login,
         repo: repository.name,
@@ -88,7 +143,7 @@ export async function handleFileComment(event: WebhookEvent, octokit: Octokit) {
     const commentBody = comment.body.toLowerCase();
 
     if (commentBody.includes('@chatbot generate unit testing code for this file')) {
-      const unitTests = await generateUnitTests(repository.full_name, pull_request.head.ref, comment.path);
+      const unitTests = await generateUnitTestsPerFile(repository.full_name, pull_request.head.ref, comment.path);
       await octokit.pulls.createReviewComment({
         owner: repository.owner.login,
         repo: repository.name,
@@ -146,117 +201,106 @@ export async function handlePullRequest(event: WebhookEvent, octokit: Octokit) {
   }
 }
 
-export async function handlePRComment(event: WebhookEvent, octokit: Octokit) {
-  if ('comment' in event && 'pull_request' in event) {
-    const { comment, pull_request, repository } = event;
-    const commentBody = comment.body.toLowerCase();
-
-    if (commentBody.includes('@chatbot generate interesting stats')) {
-      const stats = await generateStats(repository.full_name);
-      await octokit.issues.createComment({
-        owner: repository.owner.login,
-        repo: repository.name,
-        issue_number: pull_request.number,
-        body: `Here are some interesting stats about this repository:\n\n${stats}`
-      });
-    } else if (commentBody.includes('@chatbot show all the console.log statements')) {
-      const consoleLogStatements = await findConsoleLogStatements(repository.full_name, pull_request.head.ref);
-      await octokit.issues.createComment({
-        owner: repository.owner.login,
-        repo: repository.name,
-        issue_number: pull_request.number,
-        body: `Here are all the console.log statements in this repository:\n\n${consoleLogStatements}`
-      });
-    } else if (commentBody.includes('@chatbot read') && commentBody.includes('and generate')) {
-      const filePath = commentBody.split('read')[1].split('and')[0].trim();
-      if (commentBody.includes('unit testing code')) {
-        const unitTests = await generateUnitTests(repository.full_name, pull_request.head.ref, filePath);
-        await octokit.issues.createComment({
-          owner: repository.owner.login,
-          repo: repository.name,
-          issue_number: pull_request.number,
-          body: `Here are the generated unit tests for ${filePath}:\n\n${unitTests}`
-        });
-      } else if (commentBody.includes('class diagram')) {
-        const classDiagram = await generateClassDiagram(repository.full_name, pull_request.head.ref, filePath);
-        await octokit.issues.createComment({
-          owner: repository.owner.login,
-          repo: repository.name,
-          issue_number: pull_request.number,
-          body: `Here's the generated class diagram for ${filePath}:\n\n${classDiagram}`
-        });
-      }
-    } else if (commentBody.includes('@chatbot help me debug coderabbit configuration file')) {
-      const debugInfo = await debugBotConfig(repository.full_name, pull_request.head.ref);
-      await octokit.issues.createComment({
-        owner: repository.owner.login,
-        repo: repository.name,
-        issue_number: pull_request.number,
-        body: `Here's some debug information for your CodeRabbit configuration:\n\n${debugInfo}`
-      });
-    }
-  }
-}
-
 export async function handleIssueComment(event: WebhookEvent, octokit: Octokit) {
   if ('comment' in event && 'issue' in event) {
     const { comment, issue, repository } = event;
     const commentBody = comment.body.toLowerCase();
-    const appName = '@intellibotdemo'; // Replace with your actual GitHub app name
+    const appName = '@intellibotdemo';
 
-    if (commentBody.includes(appName) && commentBody.toLowerCase().includes('generate') && commentBody.toLowerCase().includes('stats')) {
-      const stats = await generateStats(repository.full_name);
-      await octokit.issues.createComment({
-        owner: repository.owner.login,
-        repo: repository.name,
-        issue_number: issue.number,
-        body: `Here are some interesting stats about this repository:\n\n${stats}`
-      });
-    } else if (commentBody.startsWith(appName)) {
+    if (commentBody.startsWith(appName)) {
       const userQuery = commentBody.replace(appName, '').trim();
       try {
-        let context = "Files involved in this PR:\n";
-        
-        // Check if the issue is actually a pull request
-        if ('pull_request' in issue) {
-          try {
-            const { data: files } = await octokit.pulls.listFiles({
-              owner: repository.owner.login,
-              repo: repository.name,
-              pull_number: issue.number,
-            });
-            console.log("files: ", files);
-            for (const file of files) {
-              context += `${file.filename}\n`;
-              if (file.status !== 'removed') {
-                try {
-                  const { data: content } = await octokit.repos.getContent({
-                    owner: repository.owner.login,
-                    repo: repository.name,
-                    path: file.filename,
-                    // Removed the 'ref' parameter
-                  });
-                  if ('content' in content && typeof content.content === 'string') {
-                    context += `Content:\n${Buffer.from(content.content, 'base64').toString('utf-8')}\n\n`;
-                  } else {
-                    context += `Unable to decode content for this file.\n\n`;
-                  }
-                } catch (contentError) {
-                  console.error(`Error fetching content for ${file.filename}:`, contentError);
-                  context += `Unable to fetch content for this file.\n\n`;
-                }
-              }
+        // Classify the user query using the LLM
+        const intention = await invokeModel(bedrockClient, modelId, intentionPrompt.replace('{{USER_QUERY}}', userQuery));
+        let response = '';
+        console.log('User query intention: ', intention)
+        switch (intention.trim()) {
+          case 'Generate repository stats':
+            const stats = await generateStats(repository.full_name);
+            response = `Here are some interesting stats about this repository:\n\n${stats}`;
+            break;
+
+          case 'Show console.log statements':
+            const consoleLogStatements = await findConsoleLogStatements(repository.full_name);
+            response = `Here are all the console.log statements in this repository:\n\n${consoleLogStatements}`;
+            break;
+
+          case 'Generate unit tests':
+            const filePathPrompt = `Extract the file path from the following query: "${userQuery}"
+File path:`;
+            const filePath = await invokeModel(bedrockClient, modelId, filePathPrompt);
+            if (filePath.trim()) {
+              const unitTests = await generateUnitTestsPerFile(repository.full_name, issue.number.toString(), filePath.trim());
+              response = `Here are the generated unit tests for ${filePath.trim()}:\n\n${unitTests}`;
+            } else {
+              response = "I couldn't determine which file you want unit tests for. Please specify the file path.";
             }
-          } catch (filesError) {
-            console.error('Error fetching files:', filesError);
-            context += 'Unable to fetch files for this pull request.\n';
-          }
-        } else {
-          context += 'This is not a pull request, so no files are directly associated.\n';
+            break;
+
+          case 'Generate class diagram and README':
+            const packagePathPrompt = `Extract the package path from the following query: "${userQuery}"
+Package path:`;
+            const packagePath = await invokeModel(bedrockClient, modelId, packagePathPrompt);
+            if (packagePath.trim()) {
+              const classDiagram = await generateClassDiagram(repository.full_name, packagePath.trim());
+              response = `Here's the class diagram for ${packagePath.trim()}:\n\n${classDiagram}\n\nAnd here's a README in markdown format:\n\n[Generated README content]`;
+            } else {
+              response = "I couldn't determine which package you want a class diagram for. Please specify the package path.";
+            }
+            break;
+
+          case 'Debug IntelliBot configuration':
+            const debugInfo = await debugBotConfig(repository.full_name);
+            response = `Here's some debug information for the IntelliBot configuration:\n\n${debugInfo}`;
+            break;
+
+          default:
+            // For general queries, use the existing context-based approach
+            let context = "Files involved in this PR:\n";
+            if ('pull_request' in issue && issue.pull_request) {
+              try {
+                const { data: files } = await octokit.pulls.listFiles({
+                  owner: repository.owner.login,
+                  repo: repository.name,
+                  pull_number: issue.number,
+                });
+                for (const file of files) {
+                  context += `${file.filename}\n`;
+                  if (file.status !== 'removed') {
+                    try {
+                      const { data: pullRequest } = await octokit.pulls.get({
+                        owner: repository.owner.login,
+                        repo: repository.name,
+                        pull_number: issue.number,
+                      });
+                      const { data: content } = await octokit.repos.getContent({
+                        owner: repository.owner.login,
+                        repo: repository.name,
+                        path: file.filename,
+                        ref: pullRequest.head.sha,
+                      });
+                      if ('content' in content && typeof content.content === 'string') {
+                        context += `Content:\n${Buffer.from(content.content, 'base64').toString('utf-8')}\n\n`;
+                      } else {
+                        context += `Unable to decode content for this file.\n\n`;
+                      }
+                    } catch (contentError) {
+                      console.error(`Error fetching content for ${file.filename}:`, contentError);
+                      context += `Unable to fetch content for this file.\n\n`;
+                    }
+                  }
+                }
+              } catch (filesError) {
+                console.error('Error fetching files:', filesError);
+                context += 'Unable to fetch files for this pull request.\n';
+              }
+            } else {
+              context += 'This is not a pull request, so no files are directly associated.\n';
+            }
+            const fullQuery = `${context}\n\nUser query: ${userQuery}`;
+            response = await invokeModel(bedrockClient, modelId, fullQuery);
         }
-        const fullQuery = `${context}\n\nUser query: ${userQuery}`;
-        console.log("final user query along with context: ", fullQuery);
-        const response = await invokeModel(bedrockClient, modelId, fullQuery);
+
         await octokit.issues.createComment({
           owner: repository.owner.login,
           repo: repository.name,
@@ -264,7 +308,7 @@ export async function handleIssueComment(event: WebhookEvent, octokit: Octokit) 
           body: `Here's the response to your query:\n\n${response}`
         });
       } catch (error) {
-        console.error('Error invoking the model:', error);
+        console.error('Error processing the request:', error);
         console.error('GitHub App Token:', process.env.GITHUB_APP_TOKEN ? 'Set' : 'Not set');
         console.error('Octokit instance:', octokit ? 'Created' : 'Not created');
         await octokit.issues.createComment({
