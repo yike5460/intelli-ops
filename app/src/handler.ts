@@ -226,14 +226,27 @@ export async function handleIssueComment(event: WebhookEvent, octokit: Octokit) 
             break;
 
           case 'Generate unit tests':
-            const filePathPrompt = `Extract the file path from the following query: "${userQuery}"
-File path:`;
-            const filePath = await invokeModel(bedrockClient, modelId, filePathPrompt);
-            if (filePath.trim()) {
-              const unitTests = await generateUnitTestsPerFile(repository.full_name, issue.number.toString(), filePath.trim());
-              response = `Here are the generated unit tests for ${filePath.trim()}:\n\n${unitTests}`;
+            if ('pull_request' in issue && issue.pull_request) {
+              try {
+                const { data: files } = await octokit.pulls.listFiles({
+                  owner: repository.owner.login,
+                  repo: repository.name,
+                  pull_number: issue.number,
+                });
+                let allUnitTests = '';
+                for (const file of files) {
+                  if (file.status !== 'removed') {
+                    const unitTests = await generateUnitTestsPerFile(repository.full_name, issue.number.toString(), file.filename);
+                    allUnitTests += `Unit tests for ${file.filename}:\n\n${unitTests}\n\n`;
+                  }
+                }
+                response = `Here are the generated unit tests for files involved in this pull request:\n\n${allUnitTests}`;
+              } catch (error) {
+                console.error('Error fetching files or generating unit tests:', error);
+                response = "An error occurred while generating unit tests for the pull request files.";
+              }
             } else {
-              response = "I couldn't determine which file you want unit tests for. Please specify the file path.";
+              response = "This issue is not associated with a pull request. Unit tests can only be generated for pull request files.";
             }
             break;
 

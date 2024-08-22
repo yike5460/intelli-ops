@@ -361,17 +361,9 @@ You are an expert code reviewer tasked with reviewing a code change (CL) for a s
 Maintain a constructive and educational tone. Be thorough but not overly pedantic. Remember that the goal is continuous improvement, not perfection.
 </tone_context>
 
-<background_data>
-<project_info>
-[Insert brief description of the project, its goals, and any relevant context]
-</project_info>
-
 <code_change>
 [Insert the code change to be reviewed, including file names and line numbers if applicable]
 </code_change>
-</background_data>
-
-Provide your review in ONLY one of the following formats, if changed code is too simple or not fitting in categories below, please answer "No review needed":
 
 <detailed_task_description>
 Review the provided code change, considering the following aspects:
@@ -389,7 +381,7 @@ Review the provided code change, considering the following aspects:
 Provide feedback on these aspects, categorizing your comments as follows:
 - Critical: Issues that must be addressed before approval.
 - Improvement: Suggestions that would significantly improve the code but aren't blocking.
-- Nitpick: Minor stylistic or preferential changes, prefixed with "Nit:".
+- Suggestion: Minor stylistic or preferential changes, prefixed with "Suggestion:".
 </detailed_task_description>
 
 <rules>
@@ -402,10 +394,9 @@ Provide feedback on these aspects, categorizing your comments as follows:
 7. If relevant, mention any educational points that could help the developer learn, prefixed with "Learning opportunity:".
 </rules>
 
-<output_format>
-If changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't output any further details in categories below.
-Otherwise provide your review in the following format. Limit your response to 200 words.
+If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, Suggestions, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 200 words.
 
+<output_format>
 Summary:
 [Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below]
 
@@ -413,19 +404,15 @@ Critical Issues:
 [List any critical issues that need to be addressed]
 
 Improvements:
-[List suggested improvements]
+[List potential improvements]
 
-Nitpicks:
-[List any nitpicks or minor suggestions]
+Suggestions:
+[List any minor suggestions]
 </output_format>
-
-<immediate_task>
-Please review the provided code change and provide your feedback following the guidelines and format specified above.
-</immediate_task>
 `;
 
-const concise_review_prompt = `
-<task_context>
+const concise_review_prompt =
+`<task_context>
 You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress. Your feedback should be constructive, educational, and focused on the most important issues.
 </task_context>
 
@@ -443,12 +430,8 @@ Review the provided code change, considering the following aspects:
 2. Functionality: Assess if the code does what it's intended to do and if it's good for the users.
 3. Complexity: Check if the code is more complex than necessary.
 4. Tests: Verify the presence and quality of unit, integration, or end-to-end tests.
-5. Naming: Ensure clear and appropriate naming for variables, functions, and classes.
-6. Comments: Check for clear and useful comments that explain why, not what.
-7. Style: Verify adherence to the project's style guide.
-8. Documentation: Check if necessary documentation is updated or added.
-9. Potential issues: Look for possible concurrency problems, edge cases, or error handling issues.
-10. Code health: Assess if the change improves the overall code health of the system.
+5. Comments: Check for clear and useful comments that explain why, not what.
+6. Potential issues: Look for possible concurrency problems, edge cases, or error handling issues.
 
 Provide feedback on these aspects, categorizing your comments as follows:
 - Critical: Issues that must be addressed before approval.
@@ -461,28 +444,20 @@ Provide feedback on these aspects, categorizing your comments as follows:
 3. Be specific in your feedback, referencing line numbers when applicable.
 4. Explain the reasoning behind your suggestions, especially for design-related feedback.
 5. If suggesting an alternative approach, briefly explain its benefits.
-6. Acknowledge good practices and improvements in the code.
-7. If relevant, mention any educational points that could help the developer learn, prefixed with "Learning opportunity:".
 </rules>
 
-<output_format>
-If changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't output any further details in categories below.
-Otherwise provide your review in the following format. Limit your response to 200 words.
+If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 100 words.
 
+<output_format>
 Summary:
-[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below, Note if changed code is too simple or not fitting in categories below, please answer "No Review Needed, LGTM!" directly. Limit your response to 200 words.]
+[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below]
 
 Critical Issues:
 [List any critical issues that need to be addressed]
 
 Improvements:
-[List suggested improvements]
-
+[List potential improvements]
 </output_format>
-
-<immediate_task>
-Please review the provided code change and provide your feedback following the guidelines and format specified above.
-</immediate_task>
 `;
 
 export async function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string): Promise<string> {

@@ -6,14 +6,15 @@ const bedrockClient = new BedrockRuntimeClient({ region: 'us-east-1' });
 const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0'; // Replace with your desired model ID
 const unitTestPrompt = "Generate unit tests for the following code: {{SOURCE_CODE}}";
 
-export async function generateUnitTestsPerFile(repoFullName: string, branch: string, filePath: string): Promise<string | undefined> {
+// invoke the function e.g. await generateUnitTestsPerFile(repository.full_name, issue.number.toString(), file.filename);
+export async function generateUnitTestsPerFile(repoFullName: string, issueNumber: string, fileName: string): Promise<string | undefined> {
   try {
     const [owner, repo] = repoFullName.split('/');
     const { data: fileContent } = await octokit.repos.getContent({
       owner,
       repo,
-      path: filePath,
-      ref: branch
+      path: fileName,
+      ref: `pull/${issueNumber}/head`
     });
 
     if ('content' in fileContent && typeof fileContent.content === 'string') {
@@ -34,18 +35,15 @@ export async function generateUnitTestsPerFile(repoFullName: string, branch: str
       };
 
       const command = new InvokeModelCommand({
-          // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
           modelId: modelId,
           contentType: "application/json",
           body: JSON.stringify(payload),
       });
 
-      // const timeoutMs = 45 * 1000; // 45 seconds considering the prompt length
       try {
         const apiResponse = await bedrockClient.send(command)
         if (apiResponse === undefined) {
           console.log('Request timed out, returning fake response');
-          // Return default or fake response
           return "An error occurred while generating unit tests.";
         }
         const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
