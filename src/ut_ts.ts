@@ -4,7 +4,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 import { execSync } from 'child_process';
 import { setTimeout } from 'timers/promises';
 
-interface TestCase {
+export interface TestCase {
     name: string;
     type: 'direct' | 'indirect' | 'not-testable';
     code: string;

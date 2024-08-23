@@ -122,7 +122,7 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 - [ ] Any dependent changes have been merged and published in downstream modules
 `;
 
-async function generatePRDescription(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>): Promise<void> {
+export async function generatePRDescription(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>): Promise<void> {
 
   const pullRequest = context.payload.pull_request as PullRequest;
   const repo = context.repo;
@@ -210,8 +210,7 @@ async function extractFunctions(content: string): Promise<string[]> {
   ];
 }
 
-// This function aim to generate unit tests for the whole code base as the baseline, with different purpose compare to the chatbot on the PR page, which is to generate unit tests for the user query with speicified file path
-async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }): Promise<void> {
+export async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }): Promise<void> {
   const pullRequest = context.payload.pull_request as PullRequest;
   const branchName = pullRequest.head.ref;
   let testCases: any[] = []; // Declare the testCases variable
@@ -524,7 +523,7 @@ export async function invokeModel(client: BedrockRuntimeClient, modelId: string,
   }
 }
 
-async function generateCodeReviewComment(bedrockClient: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, excludePatterns: string[], reviewLevel: string): Promise<void> {
+export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, excludePatterns: string[], reviewLevel: string): Promise<void> {
 
   const pullRequest = context.payload.pull_request as PullRequest;
   const repo = context.repo;
