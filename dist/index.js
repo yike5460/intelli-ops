@@ -30,16 +30,16 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.generatePRDescription = generatePRDescription;
+exports.generateUnitTestsSuite = generateUnitTestsSuite;
 exports.invokeModel = invokeModel;
+exports.generateCodeReviewComment = generateCodeReviewComment;
 const core = __importStar(__nccwpck_require__(2186));
 const github_1 = __nccwpck_require__(5438);
 const client_bedrock_runtime_1 = __nccwpck_require__(9687);
 // current we support typescript and python, while the python library is not available yet, we will use typescript as the default language
 // using abosolute path to import the functions from ut_ts.ts
 const ut_ts_1 = __nccwpck_require__(3159);
-const child_process_1 = __nccwpck_require__(2081);
-const path = __importStar(__nccwpck_require__(1017));
-const fs = __importStar(__nccwpck_require__(7147));
 // This function splits the content into chunks of maxChunkSize
 function splitContentIntoChunks_deprecated(content, maxChunkSize) {
     const chunks = [];
@@ -204,76 +204,62 @@ async function extractFunctions(content) {
 async function generateUnitTestsSuite(client, modelId, octokit, repo) {
     const pullRequest = github_1.context.payload.pull_request;
     const branchName = pullRequest.head.ref;
-    let testCases = []; // Declare the testCases variable
     let allTestCases = []; // Store all generated test cases
-    // Execute the code_layout.sh script
-    const outputFile = 'combined_code_dump.txt';
-    // TODO, consider to extract the function per file in code_layout.sh instead of doing it here (extractFunctions)
-    const scriptPath = path.join(__dirname, 'code_layout.sh');
-    (0, child_process_1.execSync)(`chmod +x "${scriptPath}" && "${scriptPath}" . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
-    // Read the combined code
-    const combinedCode = fs.readFileSync(outputFile, 'utf8');
-    // Split the combined code into chunks based on file patterns
-    const fileChunks = splitIntoSoloFile(combinedCode);
-    // // Process each file chunk at function level
-    // for (const [filename, content] of Object.entries(fileChunks)) {
-    //   console.log(`Processing file ${filename}: ${content}`);
-    //   // skip file *.d.ts and test files
-    //   if (filename.endsWith('.ts') && !filename.includes('test') && !filename.endsWith('.d.ts')) {
-    //     const functions = await extractFunctions(content);
-    //     console.log(`Extracted functions: ${functions} from ${filename}`);
-    //     const testCasesPromises = functions.map(async (func) => {
-    //       const maxChunkSize = 1024;
-    //       if (func.length <= maxChunkSize) {
-    //         try {
-    //           const testCases = await generateUnitTests(client, modelId, func);
-    //           console.log(`Generated test cases for function ${func} from ${filename}`);
-    //           return testCases;
-    //         } catch (error) {
-    //           console.error(`Error generating test cases for function ${func} in ${filename}:`, error);
-    //           return [];
-    //         }
-    //       } else {
-    //         console.log(`Skipping function in ${filename} due to size limit`);
-    //         return [];
-    //       }
-    //     });
-    //     try {
-    //       const testCasesResults = await Promise.allSettled(testCasesPromises);
-    //       testCasesResults.forEach((result) => {
-    //         if (result.status === 'fulfilled' && result.value.length > 0) {
-    //           allTestCases = allTestCases.concat(result.value);
-    //         } else if (result.status === 'rejected') {
-    //           console.error(`Error processing test cases for file ${filename}:`, result.reason);
-    //         }
-    //       });
-    //     } catch (error) {
-    //       console.error(`Error processing test cases for file ${filename}:`, error);
-    //     }
-    //   }
-    // }
-    // Process each file chunk at file level since we already filter the functions inside the file in the code_layout.sh
-    for (const [filename, content] of Object.entries(fileChunks)) {
-        console.log(`Generating unit tests for file ${filename}`);
-        // skip file *.d.ts and test files
-        if (filename.endsWith('.ts') && !filename.includes('test') && !filename.endsWith('.d.ts')) {
-            const maxChunkSize = 4096 * 10;
-            if (content.length <= maxChunkSize) {
-                try {
-                    const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, content);
-                    // console.log(`Generated test cases for function ${content}`);
-                    allTestCases = allTestCases.concat(testCases);
-                }
-                catch (error) {
-                    console.error(`Error generating test cases for file ${filename}:`, error);
+    // Check if the "auto unit test baseline" tag exists
+    const { data: tags } = await octokit.rest.repos.listTags({
+        ...repo,
+        per_page: 100,
+    });
+    const baselineTagExists = tags.some(tag => tag.name === 'auto unit test baseline');
+    if (!baselineTagExists) {
+        // Generate tests for all .ts files in the codebase
+        const { data: files } = await octokit.rest.repos.getContent({
+            ...repo,
+            path: '',
+        });
+        if (Array.isArray(files)) {
+            for (const file of files) {
+                if (file.type === 'file' && file.name.endsWith('.ts') && !file.name.includes('test') && !file.name.endsWith('.d.ts')) {
+                    const { data: content } = await octokit.rest.repos.getContent({
+                        ...repo,
+                        path: file.path,
+                    });
+                    if ('content' in content && typeof content.content === 'string') {
+                        const decodedContent = Buffer.from(content.content, 'base64').toString('utf8');
+                        const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, decodedContent);
+                        allTestCases = allTestCases.concat(testCases);
+                    }
                 }
             }
-            else {
-                console.log(`Skipping file ${filename} due to size limit ${maxChunkSize} or excluded by the file name ending with test or d.ts`);
+        }
+        // Create the baseline tag
+        await octokit.rest.git.createRef({
+            ...repo,
+            ref: 'refs/tags/auto unit test baseline',
+            sha: pullRequest.head.sha,
+        });
+    }
+    else {
+        // Generate tests only for files changed in the PR
+        const { data: changedFiles } = await octokit.rest.pulls.listFiles({
+            ...repo,
+            pull_number: pullRequest.number,
+        });
+        for (const file of changedFiles) {
+            if (file.filename.endsWith('.ts') && !file.filename.includes('test') && !file.filename.endsWith('.d.ts')) {
+                const { data: content } = await octokit.rest.repos.getContent({
+                    ...repo,
+                    path: file.filename,
+                    ref: pullRequest.head.sha,
+                });
+                if ('content' in content && typeof content.content === 'string') {
+                    const decodedContent = Buffer.from(content.content, 'base64').toString('utf8');
+                    const testCases = await (0, ut_ts_1.generateUnitTests)(client, modelId, decodedContent);
+                    allTestCases = allTestCases.concat(testCases);
+                }
             }
         }
     }
-    // console.log('All test cases:', allTestCases);
     if (allTestCases.length === 0) {
         console.warn('No test cases generated. Skipping unit tests execution and report generation.');
         return;
@@ -287,21 +273,9 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
             if (!branchName) {
                 throw new Error('Unable to determine the branch name');
             }
-            // Generate a summary of the unit tests with the number of test case according to the testCases array
-            // const unitTestsSummary = `Generated ${testCases.length} unit tests`;
-            // Update the PR description with the unit tests summary
-            // const currentDescription = pullRequest.body || '';
-            // const updatedDescription = `${currentDescription}\n\n## Generated Unit Tests\n\n${unitTestsSummary}`;
-            // await octokit.rest.pulls.update({
-            //   ...repo,
-            //   pull_number: pullRequest.number,
-            //   body: updatedDescription,
-            // });
-            // console.log('PR description updated with unit tests summary.');
             // Create a new file with the generated unit tests in test folder
             const unitTestsContent = allTestCases.map(tc => tc.code).join('\n\n');
             const unitTestsFileName = 'test/unit_tests.ts';
-            // console.log(`Generating unit tests to PR #${pullRequest.number} on branch: ${branchName} with unit test content: ${unitTestsContent}`);
             // Check if the file already exists
             let fileSha;
             try {
@@ -321,12 +295,11 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
             await octokit.rest.repos.createOrUpdateFileContents({
                 ...repo,
                 path: unitTestsFileName,
-                message: 'Add generated unit tests',
+                message: 'Add or update generated unit tests',
                 content: Buffer.from(unitTestsContent).toString('base64'),
                 branch: branchName,
                 sha: fileSha, // Include the sha if the file exists, undefined otherwise
             });
-            // console.log(`Unit tests added to PR as ${unitTestsFileName}`);
         }
         catch (error) {
             console.error('Error occurred while pushing the changes to the PR branch', error);
@@ -343,17 +316,9 @@ You are an expert code reviewer tasked with reviewing a code change (CL) for a s
 Maintain a constructive and educational tone. Be thorough but not overly pedantic. Remember that the goal is continuous improvement, not perfection.
 </tone_context>
 
-<background_data>
-<project_info>
-[Insert brief description of the project, its goals, and any relevant context]
-</project_info>
-
 <code_change>
 [Insert the code change to be reviewed, including file names and line numbers if applicable]
 </code_change>
-</background_data>
-
-Provide your review in ONLY one of the following formats, if changed code is too simple or not fitting in categories below, please answer "No review needed":
 
 <detailed_task_description>
 Review the provided code change, considering the following aspects:
@@ -371,7 +336,7 @@ Review the provided code change, considering the following aspects:
 Provide feedback on these aspects, categorizing your comments as follows:
 - Critical: Issues that must be addressed before approval.
 - Improvement: Suggestions that would significantly improve the code but aren't blocking.
-- Nitpick: Minor stylistic or preferential changes, prefixed with "Nit:".
+- Suggestion: Minor stylistic or preferential changes, prefixed with "Suggestion:".
 </detailed_task_description>
 
 <rules>
@@ -384,10 +349,9 @@ Provide feedback on these aspects, categorizing your comments as follows:
 7. If relevant, mention any educational points that could help the developer learn, prefixed with "Learning opportunity:".
 </rules>
 
-<output_format>
-If changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't output any further details in categories below.
-Otherwise provide your review in the following format. Limit your response to 200 words.
+If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, Suggestions, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 200 words.
 
+<output_format>
 Summary:
 [Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below]
 
@@ -395,18 +359,13 @@ Critical Issues:
 [List any critical issues that need to be addressed]
 
 Improvements:
-[List suggested improvements]
+[List potential improvements]
 
-Nitpicks:
-[List any nitpicks or minor suggestions]
+Suggestions:
+[List any minor suggestions]
 </output_format>
-
-<immediate_task>
-Please review the provided code change and provide your feedback following the guidelines and format specified above.
-</immediate_task>
 `;
-const concise_review_prompt = `
-<task_context>
+const concise_review_prompt = `<task_context>
 You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress. Your feedback should be constructive, educational, and focused on the most important issues.
 </task_context>
 
@@ -424,12 +383,8 @@ Review the provided code change, considering the following aspects:
 2. Functionality: Assess if the code does what it's intended to do and if it's good for the users.
 3. Complexity: Check if the code is more complex than necessary.
 4. Tests: Verify the presence and quality of unit, integration, or end-to-end tests.
-5. Naming: Ensure clear and appropriate naming for variables, functions, and classes.
-6. Comments: Check for clear and useful comments that explain why, not what.
-7. Style: Verify adherence to the project's style guide.
-8. Documentation: Check if necessary documentation is updated or added.
-9. Potential issues: Look for possible concurrency problems, edge cases, or error handling issues.
-10. Code health: Assess if the change improves the overall code health of the system.
+5. Comments: Check for clear and useful comments that explain why, not what.
+6. Potential issues: Look for possible concurrency problems, edge cases, or error handling issues.
 
 Provide feedback on these aspects, categorizing your comments as follows:
 - Critical: Issues that must be addressed before approval.
@@ -442,28 +397,20 @@ Provide feedback on these aspects, categorizing your comments as follows:
 3. Be specific in your feedback, referencing line numbers when applicable.
 4. Explain the reasoning behind your suggestions, especially for design-related feedback.
 5. If suggesting an alternative approach, briefly explain its benefits.
-6. Acknowledge good practices and improvements in the code.
-7. If relevant, mention any educational points that could help the developer learn, prefixed with "Learning opportunity:".
 </rules>
 
-<output_format>
-If changed code is too simple or not fitting in categories below, please answer only "No Review Needed, LGTM!" directly, don't output any further details in categories below.
-Otherwise provide your review in the following format. Limit your response to 200 words.
+If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 100 words.
 
+<output_format>
 Summary:
-[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below, Note if changed code is too simple or not fitting in categories below, please answer "No Review Needed, LGTM!" directly. Limit your response to 200 words.]
+[Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below]
 
 Critical Issues:
 [List any critical issues that need to be addressed]
 
 Improvements:
-[List suggested improvements]
-
+[List potential improvements]
 </output_format>
-
-<immediate_task>
-Please review the provided code change and provide your feedback following the guidelines and format specified above.
-</immediate_task>
 `;
 async function invokeModel(client, modelId, payloadInput) {
     try {
@@ -51641,91 +51588,52 @@ async function generateFakeResponse() {
     ];
 }
 async function generateUnitTests(client, modelId, sourceCode) {
-    // Define the prompt to send to
+    // Define the prompt to send to Claude
     const prompt = `
-    Analyze the following TypeScript code and generate unit tests:
-    
+    You are an expert TypeScript developer specializing in unit testing. Your task is to analyze the following TypeScript code and generate comprehensive unit tests using Jest.
+
+    <source_code>
     ${sourceCode}
-    
-    Categorize the methods into:
-    1. Methods that can be tested directly
-    2. Methods that can be tested indirectly
-    3. Methods that are not unit-testable
-    
-    For each testable method, create a unit test. Use Jest as the testing framework.
-    Return the results as a JSON array of test cases, where each test case has the following structure:
-    {
-        "name": "Test name",
-        "type": "direct" | "indirect" | "not-testable",
-        "code": "The actual test code"
-    }
-    
-    Here are a few examples of the expected output for the given source code:
-    <source code example>
-    export async function runUnitTests(testCases: TestCase[]): Promise<void> {
-      if (!Array.isArray(testCases) || testCases.length === 0) {
-          console.log('Input test cases', testCases);
-          console.log('No test cases to run');
-          return;
-      }
-      const testDir = path.join(__dirname, '..', 'test');
-      if (!fs.existsSync(testDir)) {
-          fs.mkdirSync(testDir, { recursive: true });
-      }
-      console.log('Writing test cases to:', testDir, testCases);
-      const testFilePath = path.join(testDir, 'generated.test.ts');
-      const testFileContent = testCases
-          .filter(tc => tc.type !== 'not-testable')
-          .map(tc => tc.code)
-          .join('\n\n');
-  
-      fs.writeFileSync(testFilePath, testFileContent);
-  
-      try {
-          // log out the execution result of the test
-          execSync('npx jest', { stdio: 'inherit' });
-          console.log('Tests passed successfully');
-      } catch (error) {
-          console.error('Error running tests:', error);
-      }
-    }
-    </source code example>
-    <unit test examples>
+    </source_code>
+
+    Please follow these steps:
+    1. Carefully read and understand the provided TypeScript code.
+    2. Categorize each method into one of these types:
+       a) Methods that can be tested directly
+       b) Methods that can be tested indirectly
+       c) Methods that are not unit-testable
+    3. For each testable method, create a unit test using Jest.
+    4. Structure your response as a JSON array of test cases, where each test case has the following format:
+       {
+           "name": "Test name",
+           "type": "direct" | "indirect" | "not-testable",
+           "code": "The actual test code"
+       }
+
+    Important guidelines:
+    - Ensure your tests are comprehensive and cover various scenarios, including edge cases.
+    - Use clear and descriptive test names.
+    - Include comments in your test code to explain the purpose of each test.
+    - Follow TypeScript and Jest best practices.
+    - For methods that are not unit-testable, explain why in a comment.
+
+    Here's an example of the expected output format:
+    <example>
     [
       {
         "name": "Test input validation with empty array",
         "type": "direct",
-        "code": "import { runUnitTests } from '../src/yourFile';\nimport * as fs from 'fs';\nimport * as path from 'path';\n\njest.mock('fs');\njest.mock('path');\njest.mock('child_process');\n\ndescribe('runUnitTests', () => {\n  beforeEach(() => {\n    jest.clearAllMocks();\n    console.log = jest.fn();\n  });\n\n  it('should handle empty input array', async () => {\n    await runUnitTests([]);\n    expect(console.log).toHaveBeenCalledWith('Input test cases', []);\n    expect(console.log).toHaveBeenCalledWith('No test cases to run');\n  });\n});"
-      },
-      {
-        "name": "Test directory creation",
-        "type": "direct",
-        "code": "import { runUnitTests } from '../src/yourFile';\nimport * as fs from 'fs';\nimport * as path from 'path';\n\njest.mock('fs');\njest.mock('path');\njest.mock('child_process');\n\ndescribe('runUnitTests', () => {\n  beforeEach(() => {\n    jest.clearAllMocks();\n    (fs.existsSync as jest.Mock).mockReturnValue(false);\n  });\n\n  it('should create test directory if it doesn\\'t exist', async () => {\n    await runUnitTests([{ type: 'direct', code: 'test code' }]);\n    expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });\n  });\n});"
-      },
-      {
-        "name": "Test file writing",
-        "type": "direct",
-        "code": "import { runUnitTests } from '../src/yourFile';\nimport * as fs from 'fs';\nimport * as path from 'path';\n\njest.mock('fs');\njest.mock('path');\njest.mock('child_process');\n\ndescribe('runUnitTests', () => {\n  beforeEach(() => {\n    jest.clearAllMocks();\n    (fs.existsSync as jest.Mock).mockReturnValue(true);\n  });\n\n  it('should write test cases to file', async () => {\n    const testCases = [\n      { type: 'direct', code: 'test code 1' },\n      { type: 'not-testable', code: 'should be ignored' },\n      { type: 'direct', code: 'test code 2' }\n    ];\n    await runUnitTests(testCases);\n    expect(fs.writeFileSync).toHaveBeenCalledWith(\n      expect.any(String),\n      'test code 1\\n\\ntest code 2'\n    );\n  });\n});"
-      },
-      {
-        "name": "Test Jest execution",
-        "type": "indirect",
-        "code": "import { runUnitTests } from '../src/yourFile';\nimport * as fs from 'fs';\nimport * as path from 'path';\nimport { execSync } from 'child_process';\n\njest.mock('fs');\njest.mock('path');\njest.mock('child_process');\n\ndescribe('runUnitTests', () => {\n  beforeEach(() => {\n    jest.clearAllMocks();\n    (fs.existsSync as jest.Mock).mockReturnValue(true);\n  });\n\n  it('should execute Jest and log success message', async () => {\n    (execSync as jest.Mock).mockImplementation(() => {});\n    console.log = jest.fn();\n\n    await runUnitTests([{ type: 'direct', code: 'test code' }]);\n\n    expect(execSync).toHaveBeenCalledWith('npx jest', { stdio: 'inherit' });\n    expect(console.log).toHaveBeenCalledWith('Tests passed successfully');\n  });\n});"
-      },
-      {
-        "name": "Test error handling",
-        "type": "indirect",
-        "code": "import { runUnitTests } from '../src/yourFile';\nimport * as fs from 'fs';\nimport * as path from 'path';\nimport { execSync } from 'child_process';\n\njest.mock('fs');\njest.mock('path');\njest.mock('child_process');\n\ndescribe('runUnitTests', () => {\n  beforeEach(() => {\n    jest.clearAllMocks();\n    (fs.existsSync as jest.Mock).mockReturnValue(true);\n  });\n\n  it('should handle errors during Jest execution', async () => {\n    const error = new Error('Jest execution failed');\n    (execSync as jest.Mock).mockImplementation(() => { throw error; });\n    console.error = jest.fn();\n\n    await runUnitTests([{ type: 'direct', code: 'test code' }]);\n\n    expect(console.error).toHaveBeenCalledWith('Error running tests:', error);\n  });\n});"
-      },
-      {
-        "name": "Test console output",
-        "type": "not-testable",
-        "code": "// Console output testing is not directly testable in this context.\n// While we can mock console.log and verify it's called,\n// the actual output to the console is a side effect that\n// can't be directly tested without additional tooling or\n// modifications to the original function."
+        "code": "import { runUnitTests } from '../src/yourFile';\nimport * as fs from 'fs';\nimport * as path from 'path';\n\njest.mock('fs');\njest.mock('path');\njest.mock('child_process');\n\ndescribe('runUnitTests', () => {\n  beforeEach(() => {\n    jest.clearAllMocks();\n    console.log = jest.fn();\n  });\n\n  it('should handle empty input array', async () => {\n    // Test that the function handles an empty input array correctly\n    await runUnitTests([]);\n    expect(console.log).toHaveBeenCalledWith('Input test cases', []);\n    expect(console.log).toHaveBeenCalledWith('No test cases to run');\n  });\n});"
       }
-    ]    
-    </unit test examples>
-    Ensure that your response is a valid JSON array containing objects with the specified structure. Do not include any explanatory text outside of the JSON array.
-    Assess whether the LLM’s output is fully executable and correctly written to validate the source code. If the LLM's output is correct, return the code verbatim as it was, if not, fix the code and return the corrected version that: 1. fully executable; 2. commented thoroughly enough for a beginner to understand; 3. follows the best practices of the language.
+    ]
+    </example>
+
+    After generating the test cases, please review your output and ensure:
+    1. The tests are fully executable and correctly written.
+    2. The code is thoroughly commented for a beginner to understand.
+    3. The tests follow TypeScript and Jest best practices.
+
+    Provide your response as a valid JSON array containing objects with the specified structure. Do not include any explanatory text outside of the JSON array.
     `;
     console.log('Generating unit tests with total prompt length:', prompt.length + sourceCode.length);
     // exact the same implementation as function invokeModel in index.ts

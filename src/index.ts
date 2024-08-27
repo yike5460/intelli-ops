@@ -213,79 +213,67 @@ async function extractFunctions(content: string): Promise<string[]> {
 export async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }): Promise<void> {
   const pullRequest = context.payload.pull_request as PullRequest;
   const branchName = pullRequest.head.ref;
-  let testCases: any[] = []; // Declare the testCases variable
   let allTestCases: any[] = []; // Store all generated test cases
 
-  // Execute the code_layout.sh script
-  const outputFile = 'combined_code_dump.txt';
-  // TODO, consider to extract the function per file in code_layout.sh instead of doing it here (extractFunctions)
-  const scriptPath = path.join(__dirname, 'code_layout.sh');
-  execSync(`chmod +x "${scriptPath}" && "${scriptPath}" . ${outputFile} py js java cpp ts`, { stdio: 'inherit' });
+  // Check if the "auto unit test baseline" tag exists
+  const { data: tags } = await octokit.rest.repos.listTags({
+    ...repo,
+    per_page: 100,
+  });
+  const baselineTagExists = tags.some(tag => tag.name === 'auto unit test baseline');
 
-  // Read the combined code
-  const combinedCode = fs.readFileSync(outputFile, 'utf8');
+  if (!baselineTagExists) {
+    // Generate tests for all .ts files in the codebase
+    const { data: files } = await octokit.rest.repos.getContent({
+      ...repo,
+      path: '',
+    });
 
-  // Split the combined code into chunks based on file patterns
-  const fileChunks = splitIntoSoloFile(combinedCode);
-
-  // // Process each file chunk at function level
-  // for (const [filename, content] of Object.entries(fileChunks)) {
-  //   console.log(`Processing file ${filename}: ${content}`);
-  //   // skip file *.d.ts and test files
-  //   if (filename.endsWith('.ts') && !filename.includes('test') && !filename.endsWith('.d.ts')) {
-  //     const functions = await extractFunctions(content);
-  //     console.log(`Extracted functions: ${functions} from ${filename}`);
-  //     const testCasesPromises = functions.map(async (func) => {
-  //       const maxChunkSize = 1024;
-  //       if (func.length <= maxChunkSize) {
-  //         try {
-  //           const testCases = await generateUnitTests(client, modelId, func);
-  //           console.log(`Generated test cases for function ${func} from ${filename}`);
-  //           return testCases;
-  //         } catch (error) {
-  //           console.error(`Error generating test cases for function ${func} in ${filename}:`, error);
-  //           return [];
-  //         }
-  //       } else {
-  //         console.log(`Skipping function in ${filename} due to size limit`);
-  //         return [];
-  //       }
-  //     });
-
-  //     try {
-  //       const testCasesResults = await Promise.allSettled(testCasesPromises);
-  //       testCasesResults.forEach((result) => {
-  //         if (result.status === 'fulfilled' && result.value.length > 0) {
-  //           allTestCases = allTestCases.concat(result.value);
-  //         } else if (result.status === 'rejected') {
-  //           console.error(`Error processing test cases for file ${filename}:`, result.reason);
-  //         }
-  //       });
-  //     } catch (error) {
-  //       console.error(`Error processing test cases for file ${filename}:`, error);
-  //     }
-  //   }
-  // }
-  // Process each file chunk at file level since we already filter the functions inside the file in the code_layout.sh
-  for (const [filename, content] of Object.entries(fileChunks)) {
-    console.log(`Generating unit tests for file ${filename}`);
-    // skip file *.d.ts and test files
-    if (filename.endsWith('.ts') && !filename.includes('test') && !filename.endsWith('.d.ts')) {
-      const maxChunkSize = 4096 * 10;
-      if (content.length <= maxChunkSize) {
-        try {
-          const testCases = await generateUnitTests(client, modelId, content);
-          // console.log(`Generated test cases for function ${content}`);
-          allTestCases = allTestCases.concat(testCases);
-        } catch (error) {
-          console.error(`Error generating test cases for file ${filename}:`, error);
+    if (Array.isArray(files)) {
+      for (const file of files) {
+        if (file.type === 'file' && file.name.endsWith('.ts') && !file.name.includes('test') && !file.name.endsWith('.d.ts')) {
+          const { data: content } = await octokit.rest.repos.getContent({
+            ...repo,
+            path: file.path,
+          });
+          if ('content' in content && typeof content.content === 'string') {
+            const decodedContent = Buffer.from(content.content, 'base64').toString('utf8');
+            const testCases = await generateUnitTests(client, modelId, decodedContent);
+            allTestCases = allTestCases.concat(testCases);
+          }
         }
-      } else {
-        console.log(`Skipping file ${filename} due to size limit ${maxChunkSize} or excluded by the file name ending with test or d.ts`);
+      }
+    }
+
+    // Create the baseline tag
+    await octokit.rest.git.createRef({
+      ...repo,
+      ref: 'refs/tags/auto unit test baseline',
+      sha: pullRequest.head.sha,
+    });
+  } else {
+    // Generate tests only for files changed in the PR
+    const { data: changedFiles } = await octokit.rest.pulls.listFiles({
+      ...repo,
+      pull_number: pullRequest.number,
+    });
+
+    for (const file of changedFiles) {
+      if (file.filename.endsWith('.ts') && !file.filename.includes('test') && !file.filename.endsWith('.d.ts')) {
+        const { data: content } = await octokit.rest.repos.getContent({
+          ...repo,
+          path: file.filename,
+          ref: pullRequest.head.sha,
+        });
+        if ('content' in content && typeof content.content === 'string') {
+          const decodedContent = Buffer.from(content.content, 'base64').toString('utf8');
+          const testCases = await generateUnitTests(client, modelId, decodedContent);
+          allTestCases = allTestCases.concat(testCases);
+        }
       }
     }
   }
-  // console.log('All test cases:', allTestCases);
+
   if (allTestCases.length === 0) {
     console.warn('No test cases generated. Skipping unit tests execution and report generation.');
     return;
@@ -294,28 +282,17 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
   await runUnitTests(allTestCases);
   await generateTestReport(allTestCases);
   console.log('Unit tests and report generated successfully.');
+
   // Add the generated unit tests to existing PR
   if (pullRequest) {
     try {
       if (!branchName) {
         throw new Error('Unable to determine the branch name');
       }
-      // Generate a summary of the unit tests with the number of test case according to the testCases array
-      // const unitTestsSummary = `Generated ${testCases.length} unit tests`;
-      // Update the PR description with the unit tests summary
-      // const currentDescription = pullRequest.body || '';
-      // const updatedDescription = `${currentDescription}\n\n## Generated Unit Tests\n\n${unitTestsSummary}`;
-      // await octokit.rest.pulls.update({
-      //   ...repo,
-      //   pull_number: pullRequest.number,
-      //   body: updatedDescription,
-      // });
-      // console.log('PR description updated with unit tests summary.');
 
       // Create a new file with the generated unit tests in test folder
       const unitTestsContent = allTestCases.map(tc => tc.code).join('\n\n');
       const unitTestsFileName = 'test/unit_tests.ts';
-      // console.log(`Generating unit tests to PR #${pullRequest.number} on branch: ${branchName} with unit test content: ${unitTestsContent}`);
 
       // Check if the file already exists
       let fileSha: string | undefined;
@@ -336,12 +313,11 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
       await octokit.rest.repos.createOrUpdateFileContents({
         ...repo,
         path: unitTestsFileName,
-        message: 'Add generated unit tests',
+        message: 'Add or update generated unit tests',
         content: Buffer.from(unitTestsContent).toString('base64'),
         branch: branchName,
         sha: fileSha, // Include the sha if the file exists, undefined otherwise
       });
-      // console.log(`Unit tests added to PR as ${unitTestsFileName}`);
 
     } catch (error) {
       console.error('Error occurred while pushing the changes to the PR branch', error);
