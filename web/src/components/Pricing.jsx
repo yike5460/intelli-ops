@@ -2,6 +2,7 @@ import React from 'react';
 
 const PricingTier = ({ name, price, features, recommended }) => (
   <div className={`bg-white p-8 rounded-lg shadow-md ${recommended ? 'border-2 border-blue-600' : ''}`}>
+    {recommended && <div className="bg-blue-600 text-white text-center py-2 px-4 rounded-t-lg -mt-8 mb-6">Recommended</div>}
     <h3 className="text-2xl font-bold mb-4">{name}</h3>
     <p className="text-4xl font-bold mb-6">${price}<span className="text-xl text-gray-600">/mo</span></p>
     <ul className="mb-8">
@@ -24,23 +25,40 @@ const Pricing = () => {
   return (
     <section id="pricing" className="py-20">
       <div className="container mx-auto px-4">
-        <h2 className="text-3xl font-bold text-center mb-12">Pricing Plans</h2>
+        <h2 className="text-3xl font-bold mb-12 text-center">Pricing</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <PricingTier
             name="Basic"
-            price={9}
-            features={['Feature 1', 'Feature 2', 'Feature 3']}
+            price={9.99}
+            features={[
+              "PR Content Generation",
+              "Basic Code Review",
+              "5 repositories",
+              "Email support"
+            ]}
           />
           <PricingTier
             name="Pro"
-            price={29}
-            features={['Feature 1', 'Feature 2', 'Feature 3', 'Feature 4', 'Feature 5']}
+            price={29.99}
+            features={[
+              "All Basic features",
+              "Advanced Code Review",
+              "Unit Test Generation",
+              "20 repositories",
+              "Priority email support"
+            ]}
             recommended={true}
           />
           <PricingTier
             name="Enterprise"
-            price={99}
-            features={['Feature 1', 'Feature 2', 'Feature 3', 'Feature 4', 'Feature 5', 'Feature 6', 'Feature 7']}
+            price={99.99}
+            features={[
+              "All Pro features",
+              "Custom integrations",
+              "Unlimited repositories",
+              "24/7 phone & email support",
+              "Dedicated account manager"
+            ]}
           />
         </div>
       </div>
