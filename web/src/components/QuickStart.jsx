@@ -3,12 +3,12 @@ import CopyableCommand from './CopyableCommand';
 
 const QuickStart = () => {
   return (
-    <section id="quickstart" className="py-20 bg-gray-100">
+    <section id="quickstart" className="py-20 bg-white">
       <div className="container mx-auto px-4">
-        <h2 className="text-3xl font-bold mb-12 text-center">Quick Start</h2>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-xl font-semibold mb-2">1. Configuring IAM to trust GitHub</h3>
-          <p className="mb-4">
+        <h2 className="text-4xl font-bold mb-12 text-center text-gray-800">Quick Start</h2>
+        <div className="bg-gray-50 rounded-lg shadow-md p-6">
+          <h3 className="text-2xl font-semibold mb-4 text-gray-800">1. Configuring IAM to trust GitHub</h3>
+          <p className="mb-4 text-gray-600">
             To use GitHub's OIDC provider, you must first set up federation with the provider as an IAM IdP. Here's a sample CloudFormation template that will configure this trust for you:
           </p>
           <CopyableCommand command={`Parameters:
@@ -65,16 +65,16 @@ Outputs:
   Role:
     Value: !GetAtt Role.Arn`} />
 
-          <h3 className="text-xl font-semibold mt-6 mb-2">2. Configuring AWS Credentials</h3>
-          <p className="mb-4">Add the following to your GitHub Actions workflow file:</p>
+          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">2. Configuring AWS Credentials</h3>
+          <p className="mb-4 text-gray-600">Add the following to your GitHub Actions workflow file:</p>
           <CopyableCommand command={`- name: Configure AWS Credentials
   uses: aws-actions/configure-aws-credentials@v4
   with:
     role-to-assume: arn:aws:iam::123456789012:role/role-name
     aws-region: us-east-1`} />
 
-          <h3 className="text-xl font-semibold mt-6 mb-2">3. Using Intelli-Ops GitHub Action</h3>
-          <p className="mb-4">Add the following to your workflow file:</p>
+          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">3. Using Intelli-Ops GitHub Action</h3>
+          <p className="mb-4 text-gray-600">Add the following to your workflow file:</p>
           <CopyableCommand command={`- name: Code review using AWS Bedrock
   uses: yike5460/intelli-ops@stable
   with:
@@ -87,9 +87,9 @@ Outputs:
   env:
     GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}`} />
 
-          <h3 className="text-xl font-semibold mt-6 mb-2">4. Interacting with GitHub App</h3>
-          <p className="mb-4">You can interact with the GitHub App by commenting on pull requests. Here are some example commands:</p>
-          <ul className="list-disc list-inside mb-4">
+          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">4. Interacting with GitHub App</h3>
+          <p className="mb-4 text-gray-600">You can interact with the GitHub App by commenting on pull requests. Here are some example commands:</p>
+          <ul className="list-disc list-inside mb-4 text-gray-600">
             <li>@intellibotdemo generate interesting stats about this repository and render them as a table.</li>
             <li>@intellibotdemo show all the console.log statements in this repository.</li>
             <li>@intellibotdemo generate unit testing code for this file.</li>

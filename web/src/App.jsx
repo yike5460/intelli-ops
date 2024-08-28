@@ -9,13 +9,15 @@ import QuickStart from './components/QuickStart';
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white text-gray-800">
       <Header />
-      <Hero />
-      <Features />
-      <QuickStart />
-      <Pricing />
-      <FAQ />
+      <main>
+        <Hero />
+        <Features />
+        <QuickStart />
+        <Pricing />
+        <FAQ />
+      </main>
       <Footer />
     </div>
   );
