@@ -5,7 +5,16 @@ const QuickStart = () => {
   return (
     <section id="quickstart" className="py-20 bg-white">
       <div className="container mx-auto px-4">
-        <h2 className="text-4xl font-bold mb-12 text-center text-gray-800">Quick Start</h2>
+        <div className="relative mb-12">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300"></div>
+          </div>
+          <div className="relative flex justify-center">
+            <h2 className="text-4xl font-bold px-4 bg-white text-gray-800">
+              Quick Start
+            </h2>
+          </div>
+        </div>
         <div className="bg-gray-50 rounded-lg shadow-md p-6">
           <h3 className="text-2xl font-semibold mb-4 text-gray-800">1. Configuring IAM to trust GitHub</h3>
           <p className="mb-4 text-gray-600">
