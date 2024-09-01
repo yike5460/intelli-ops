@@ -3,6 +3,7 @@
 ## Overview
 
 This Intelli-Ops is a GitHub Action & GitHub App hybrid solution to perform automated code reviews, PR generation, unit test generation and issue operation etc. using AWS Bedrock API.
+The default model is Claude3 Sonnet, which is suitable for general purpose with optimized cost, we also support hosting your own model in Amazon SageMaker and use the specific model id prefixed with `sagemaker.<api url>` in the action options.
 
 ## Features Overview:
 
@@ -12,8 +13,8 @@ Using AI-driven GitHub Actions, you can automatically generate content for pull 
 
 ### Code Review:
 
-Using AI-driven GitHub Actions, you can perform automated code reviews on pull requests. The AI can analyze the code changes, identify potential issues or improvements, and provide feedback to the developers. This can help catch bugs early, improve code quality, and ensure that best practices are followed consistently across the codebase.
-There are tools (e.g. CodeGuru reviewer) to provide such function, but it’s not integrate into the GitHub action seamlessly, e.g. quota from official document “When you run a CodeGuru scan, your code is first uploaded into an S3 bucket in your AWS account.”
+Using AI-driven GitHub Actions, you can perform automated code reviews on pull requests. The AI can analyze the code changes, identify potential issues or improvements, and provide feedback to the developers with inline comments. This can help catch bugs early, improve code quality, and ensure that best practices are followed consistently across the codebase.
+The default review level is concise, but you can also choose detailed review level.
 
 ### Unit Test Generation & Pre-flight: 
 
@@ -34,12 +35,12 @@ Using GitHub App, you can perform issue operation by interacting inside PR comme
 Note: Be mindful of the bot's finite context window. It's strongly recommended to break down tasks such as reading entire modules into smaller chunks. For a focused discussion, use review comments to chat about specific files and their changes, instead of using the PR comments.
 
 ## Quick Start
-### Configuring IAM to trust GitHub
+### Step 1: Configuring IAM to trust GitHub
 To use GitHub's OIDC provider, you must first set up federation with the provider as an IAM IdP. The GitHub OIDC provider only needs to be created once per account (i.e. multiple IAM Roles that can be assumed by the GitHub's OIDC can share a single OIDC Provider). Here is a sample CloudFormation template that will configure this trust for you.
 
 Note that the thumbprint below has been set to all F's because the thumbprint is not used when authenticating token.actions.githubusercontent.com. This is a special case used only when GitHub's OIDC is authenticating to IAM. IAM uses its library of trusted CAs to authenticate. The value is still the API, so it must be specified.
 
-You can copy the template below, or load it from here: https://d38mtn6aq9zhn6.cloudfront.net/configure-aws-credentials-latest.yml
+You can copy the template below, or load it from [Here](https://d38mtn6aq9zhn6.cloudfront.net/configure-aws-credentials-latest.yml).
 ```yaml
 Parameters:
   GitHubOrg:
@@ -116,33 +117,30 @@ You will see the role been create with trust relationship similar to the followi
 }
 ```
 
-### Configuring AWS Credentials
+Then add the permissions to the role to invoke the Bedrock API, you can use the following policy as a reference.
 
-To configure GitHub Actions to assume the role you just created, you will need to add a workflow file to your repository. Here is an example workflow file that will assume the role you created above and run the code review action.
-
-```yaml
-    # assume the specified IAM role and set up the AWS credentials for use in subsequent steps.
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: arn:aws:iam::123456789012:role/role-name
-        aws-region: us-east-1
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "bedrock:InvokeModel",
+                "bedrock:ListFoundationModels",
+                "bedrock:GetFoundationModel"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
 ```
 
-### Intelli-Ops GitHub Action Options
+### Step 2: Intelli-Ops GitHub Action:
 
-| Option | Description | Default | Required |
-| --- | --- | --- | --- |
-| `github-token` | GitHub token for API access | N/A | Yes |
-| `aws-region` | AWS region for Bedrock | us-east-1 | Yes |
-| `model-id` | ID of the model to use for code reviews | `anthropic.claude-3-sonnet-20240229-v1:0` | Yes |
-| `exclude-files` | Comma-separated list of file patterns to exclude | N/A | No |
-| `review-level` | Level of detail for reviews ('detailed' or 'concise') | `'concise'` | No |
-| `code-review` | Whether to perform code reviews | `'false'` | No |
-| `generate-pr-description` | Whether to generate PR descriptions | `'false'` | No |
-| `generate-unit-test-suite` | Whether to generate unit test suite | `'false'` | No |
+Create a GitHub Actions workflow file in your repository .github/workflows directory, and add the following step to the workflow.
 
-### Intelli-Ops GitHub Action Sample:
+#### Intelli-Ops GitHub Action
 
 **Basic Usage**
 
@@ -171,10 +169,36 @@ To configure GitHub Actions to assume the role you just created, you will need t
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-### Overall Workflow Sample
+**Available Options**
+
+| Option | Description | Default | Required |
+| --- | --- | --- | --- |
+| `github-token` | GitHub token for API access | N/A | Yes |
+| `aws-region` | AWS region for Bedrock | us-east-1 | Yes |
+| `model-id` | ID of the model to use for code reviews | `anthropic.claude-3-sonnet-20240229-v1:0` | Yes |
+| `exclude-files` | Comma-separated list of file patterns to exclude | N/A | No |
+| `review-level` | Level of detail for reviews ('detailed' or 'concise') | `'concise'` | No |
+| `code-review` | Whether to perform code reviews | `'false'` | No |
+| `generate-pr-description` | Whether to generate PR descriptions | `'false'` | No |
+| `generate-unit-test-suite` | Whether to generate unit test suite | `'false'` | No |
+
+#### Configuring AWS Credentials
+
+To configure GitHub Actions to assume the role you just created, you will need to add a workflow file to your repository. Here is an example workflow file that will assume the role you created above and run the code review action.
 
 ```yaml
-name: Intelligent Code Review
+    # assume the specified IAM role and set up the AWS credentials for use in subsequent steps.
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::123456789012:role/role-name
+        aws-region: us-east-1
+```
+
+#### Workflow Sample
+
+```yaml
+name: Intelligent Operations with Amazon Bedrock
 # Enable manual trigger
 on:
   workflow_dispatch:
@@ -248,7 +272,39 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-### Authenticating AWS Credentials in GitHub Actions
+### Step 3 (Optional): Create the GitHub App to perform issue operation
+Go to app folder, run `npm run start` to start the server (make sure it have the network connection to receive GitHub events and previlege to access the Amazon Bedrock), then login to your GitHub, navigate to Settings -> Developer settings -> GitHub Apps -> New GitHub App, or click [here](https://github.com/settings/apps/new) to create a new GitHub App, fill in the required fields, and set the webhook URL to your server address http:<IP address>:3000/webhook, then click `Create GitHub App`.
+
+## Release the action package to customize your own
+
+```bash
+# clone the repository
+git clone https://github.com/yike5460/intelli-ops.git
+cd intelli-ops
+
+# build the action package
+npm run package
+
+# commit & push the changes
+git add .
+git commit -am "Release version $version"
+git push
+
+# release the action package
+version = "stable"
+git tag -a $version -m "Release version $version"
+git push origin $version
+gh release create $version -t "$version" -n ""
+
+# use the action package in your workflow
+- name: Code review using AWS Bedrock
+  uses: your-github-username/intelli-ops@stable
+  with:
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    aws-region: us-east-1
+```
+
+## Available Methods for Authenticating AWS Credentials in GitHub Actions
 The [document](https://github.com/aws-actions/configure-aws-credentials) outlines five different methods for retrieving AWS credentials, each with its own use case. Here's a brief overview of each method:
 1. GitHub's OIDC provider (Recommended):
 
@@ -305,7 +361,7 @@ The [document](https://github.com/aws-actions/configure-aws-credentials) outline
     role-chaining: true
 ```
 
-Key differences:
+**Key differences:**
 
 1. GitHub's OIDC provider is the recommended method as it uses short-lived credentials and doesn't require storing long-term secrets.
 2. IAM User method uses long-term credentials, which is less secure but simpler to set up.
@@ -320,20 +376,10 @@ Key differences:
 - Regularly rotate any secrets used in the workflow.
 - Use the latest version of this action to benefit from security updates.
 
-## Handy commands to release the action
-
-```bash
-version = "0.0.31"
-git tag -a $version -m "Release version $version"
-git push origin $version
-gh release create $version -t "$version" -n ""
-```
-
 ## License Summary
 This project is licensed under Apache 2.0 License. See the LICENSE file for details.
 
 ## TODO
-- support issue operation with code source and search api
-- observe the action operation metrics
-- better ut case generation with preflight execution
-- support chinese
+- Support issue operation with external source e.g. search api, local file, database, etc.
+- Better unit test case generation with preflight execution and self-correcting
+- Support other languages like Chinese etc.
