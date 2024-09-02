@@ -604,8 +604,8 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
 
       const fileContent = changedLines.join('\n');
       // two options for review level: detailed and concise
-      const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt_revised : detailed_review_prompt_revised;
-      let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', fileContent);
+      const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
+      let formattedContent = promptTemplate.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
 
       // invoke model to generate review comments
       var review = await invokeModel(bedrockClient, modelId, formattedContent);  
@@ -635,7 +635,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
       await octokit.rest.pulls.createReview({
         ...repo,
         pull_number: pullRequest.number,
-        commit_id: pullRequest.head.sha,
+        // commit_id: pullRequest.head.sha,
         body: 'Code review comments',
         event: 'COMMENT',
         comments: reviewComments,
