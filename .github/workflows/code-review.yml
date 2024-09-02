@@ -62,9 +62,9 @@ jobs:
         aws-region: us-east-1
         model-id: anthropic.claude-3-sonnet-20240229-v1:0
         exclude-files: '*.md,*.json'
-        review-level: 'concise'
-        code-review: 'false'
+        review-level: 'detailed'
+        code-review: 'true'
         generate-pr-description: 'true'
-        generate-unit-test-suite: 'true'
+        generate-unit-test-suite: 'false'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

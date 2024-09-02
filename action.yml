@@ -19,7 +19,7 @@ inputs:
   review-level:
     description: 'Review level'
     required: false
-    default: 'concise'
+    default: 'detailed'
   code-review:
     description: 'Code review'
     required: false
