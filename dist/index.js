@@ -323,7 +323,7 @@ Please analyze the code and follow these steps:
 3. For non-trivial changes, provide a focused review following the format below.
 
 <review_decision>
-Briefly explain whether this code change requires a detailed review or not, and why.
+Briefly explain whether this code change requires a detailed review or not, and why
 </review_decision>
 
 If a detailed review is warranted, provide your review as follows:
@@ -341,7 +341,7 @@ Prioritize the most important findings. If no issues are found in a category, om
 Provide 1-3 actionable, high-impact suggestions for improving the code. Include brief code snippets if helpful.
 </recommendations>
 
-Please ensure your review is concise, focused on the most important aspects, and stays within 200 words. If you need any clarification about the code, please ask before proceeding with the review.
+Please ensure your review is concise, focused on the most important aspects, and stays within 200 words. If you need any clarification about the code, please ask before proceeding with the review. Note the XML tag <review_decision>, <critical_issues>, <recommendations> should not be included in the review comments.
 `;
 const concise_review_prompt_revised = `
 You are an expert code reviewer. Review the following code snippet concisely, focusing on critical issues. Keep your response within 200 words.
@@ -369,7 +369,7 @@ Omit categories with no issues.
 Provide 1-3 high-impact suggestions. Include brief code snippets if helpful.
 </recommendations>
 
-If clarification is needed, ask before reviewing.
+If clarification is needed, ask before reviewing. Note the XML tag <review_decision>, <critical_issues>, <recommendations> should not be included in the review comments.
 `;
 // Refer to https://google.github.io/eng-practices/review/reviewer/looking-for.html and https://google.github.io/eng-practices/review/reviewer/standard.html
 const detailed_review_prompt = (/* unused pure expression or super */ null && (`<task_context>
@@ -568,7 +568,7 @@ async function generateCodeReviewComment(bedrockClient, modelId, octokit, exclud
             // invoke model to generate review comments
             var review = await invokeModel(bedrockClient, modelId, formattedContent);
             // log the generated review comments and check if it is empty
-            console.log(`Review comments ${review} generated for file: ${file.filename} with file content: ${fileContent}`);
+            // console.log(`Review comments ${review} generated for file: ${file.filename} with file content: ${fileContent}`);
             if (!review || review.trim() == '') {
                 console.warn(`No review comments generated for file ${file.filename}, skipping`);
                 continue;
