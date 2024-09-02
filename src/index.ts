@@ -578,7 +578,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
     pull_number: pullRequest.number,
   });
 
-  let reviewComments: ReviewComment[] = [];
+  let reviewComments: { path: string; position: number; body: string }[] = [];
 
   for (const file of files as PullFile[]) {
     // The sample contents of file.patch, which contains a unified diff representation of the changes made to a file in a pull request:
@@ -614,33 +614,40 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
       // log the generated review comments and check if it is empty
       // console.log(`Review comments ${review} generated for file: ${file.filename}`);
       if (!review || review.trim() == '') {
-        console.warn(`No review comments generated for file ${file.filename}, adding default review comment`);
-        // add default review comment
-        review = "No review needed, LGTM!";
+        console.warn(`No review comments generated for file ${file.filename}, skipping`);
         continue;
       }
       const position = file.patch.split('\n').findIndex(line => line.startsWith('+') && !line.startsWith('+++')) + 1;
       if (position > 0) {
         reviewComments.push({
           path: file.filename,
-          body: review,
           position: position,
+          body: review,
         });
       }
     } else {
-      console.log(`Skipping file: ${file.filename} due to the file is removed or excluded explicitly`);
+      console.log(`Skipping file: ${file.filename} due to the file being removed or explicitly excluded`);
     }
   }
 
   if (reviewComments.length > 0) {
-    // console.log('Posting code review comments to the PR with content:', reviewComments);
-    await octokit.rest.pulls.createReview({
-      ...repo,
-      pull_number: pullRequest.number,
-      event: 'COMMENT',
-      comments: reviewComments,
-    });
-    console.log('Code review comments posted successfully.');
+    try {
+      await octokit.rest.pulls.createReview({
+        ...repo,
+        pull_number: pullRequest.number,
+        commit_id: pullRequest.head.sha,
+        body: 'Code review comments',
+        event: 'COMMENT',
+        comments: reviewComments,
+        headers: {
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+      console.log('Code review comments posted successfully.');
+    } catch (error) {
+      console.error('Error posting code review comments:', error);
+      throw error;
+    }
   } else {
     console.log('No review comments to post.');
   }
