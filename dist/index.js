@@ -566,10 +566,9 @@ async function generateCodeReviewComment(bedrockClient, modelId, octokit, exclud
             const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt_revised : detailed_review_prompt_revised;
             let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', fileContent);
             // invoke model to generate review comments
-            const payloadInput = formattedContent;
-            var review = await invokeModel(bedrockClient, modelId, payloadInput);
+            var review = await invokeModel(bedrockClient, modelId, formattedContent);
             // log the generated review comments and check if it is empty
-            // console.log(`Review comments ${review} generated for file: ${file.filename}`);
+            console.log(`Review comments ${review} generated for file: ${file.filename} with file content: ${fileContent}`);
             if (!review || review.trim() == '') {
                 console.warn(`No review comments generated for file ${file.filename}, skipping`);
                 continue;
