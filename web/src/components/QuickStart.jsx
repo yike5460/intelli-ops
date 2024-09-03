@@ -1,5 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import CopyableCommand from './CopyableCommand';
+
+const FoldableCommand = ({ title, command }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="mb-4">
+      <button
+        className="flex items-center justify-between w-full px-4 py-2 text-left text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span>{title}</span>
+        <span>{isOpen ? '▲' : '▼'}</span>
+      </button>
+      {isOpen && (
+        <div className="mt-2">
+          <CopyableCommand command={command} />
+        </div>
+      )}
+    </div>
+  );
+};
 
 const QuickStart = () => {
   return (
@@ -18,9 +39,9 @@ const QuickStart = () => {
         <div className="bg-gray-50 rounded-lg shadow-md p-6">
           <h3 className="text-2xl font-semibold mb-4 text-gray-800">1. Configuring IAM to trust GitHub</h3>
           <p className="mb-4 text-gray-600">
-            To use GitHub's OIDC provider, you must first set up federation with the provider as an IAM IdP. Here's a CloudFormation template that will configure this trust for you, you can just copy or load it from here: https://d38mtn6aq9zhn6.cloudfront.net/configure-aws-credentials-latest.yml:
+            To use GitHub's OIDC provider, you must first set up federation with the provider as an IAM IdP. Here's a CloudFormation template that will configure this trust for you, you can just copy or load it from <a href="https://d38mtn6aq9zhn6.cloudfront.net/configure-aws-credentials-latest.yml" className="underline">HERE</a>:
           </p>
-          <CopyableCommand command={`Parameters:
+          <FoldableCommand title="CloudFormation Template" command={`Parameters:
   GitHubOrg:
     Description: Name of GitHub organization/user (case sensitive)
     Type: String
@@ -76,7 +97,7 @@ Outputs:
 
           <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">2. Configuring AWS Credentials</h3>
           <p className="mb-4 text-gray-600">Add the following to your GitHub Actions workflow file, note to replace the role-to-assume with the role you created in the previous step:</p>
-          <CopyableCommand command={`- name: Configure AWS Credentials
+          <FoldableCommand title="AWS Credentials Configuration" command={`- name: Configure AWS Credentials
   uses: aws-actions/configure-aws-credentials@v4
   with:
     role-to-assume: arn:aws:iam::123456789012:role/role-name
@@ -84,7 +105,7 @@ Outputs:
 
           <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">3. Clone and Publish the Action</h3>
           <p className="mb-4 text-gray-600">Before using the Intelli-Ops GitHub Action, you need to clone the repository and publish a release:</p>
-          <CopyableCommand command={`git clone https://github.com/yike5460/intelli-ops.git
+          <FoldableCommand title="Clone and Publish the Action" command={`git clone https://github.com/yike5460/intelli-ops.git
 cd intelli-ops
 version="stable"
 git tag -a $version -m "Release version $version"
@@ -94,7 +115,7 @@ gh release create $version -t "$version" -n ""`} />
 
           <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">4. Using Intelli-Ops GitHub Action</h3>
           <p className="mb-4 text-gray-600">After publishing the release, add the following to your workflow file:</p>
-          <CopyableCommand command={`- name: Code review using AWS Bedrock
+          <FoldableCommand title="Using Intelli-Ops GitHub Action" command={`- name: Code review using AWS Bedrock
   uses: your-username/intelli-ops@0.0.31
   with:
     github-token: \${{ secrets.GITHUB_TOKEN }}
@@ -109,7 +130,7 @@ gh release create $version -t "$version" -n ""`} />
 
           <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">5. Full Workflow Sample</h3>
           <p className="mb-4 text-gray-600">Here's a complete workflow sample that you can use as a reference:</p>
-          <CopyableCommand command={`name: Intelligent Code Review
+          <FoldableCommand title="Full Workflow Sample" command={`name: Intelligent Code Review
 on:
   workflow_dispatch:
   pull_request:
@@ -177,7 +198,7 @@ jobs:
 
           <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">6. Starting the GitHub App Server</h3>
           <p className="mb-4 text-gray-600">Before interacting with the GitHub App, you need to start the server that handles user requests:</p>
-          <CopyableCommand command={`cd app
+          <FoldableCommand title="Starting the GitHub App Server" command={`cd app
 npm install
 npm run start`} />
           <p className="mt-2 mb-4 text-gray-600">
