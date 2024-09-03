@@ -328,7 +328,7 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
 
 const detailed_review_prompt_revised = 
 `
-You are an expert code reviewer with deep knowledge across multiple programming languages and best practices. Your task is to review the following code snippet and provide concise, focused feedback on the most critical aspects, keeping your response within 200 words.
+You are an expert code reviewer tasked with improving the overall code health of the system. Your primary goal is to ensure that the code change (CL) definitely improves the codebase, even if it's not perfect. Review the following code snippet and provide focused feedback on the most critical aspects.
 
 Here is the code to review:
 
@@ -338,22 +338,26 @@ Here is the code to review:
 
 Please analyze the code and follow these steps:
 
-1. Assess the complexity and size of the code change.
-2. If the change is trivial, state that no substantial review is needed.
-3. For non-trivial changes, provide a focused review following the format below.
+1. Take a broad view of the change. Does it make sense overall?
+2. Examine the main parts of the CL first.
+3. Look through the rest of the CL in an appropriate sequence.
 
 <review_decision>
-Briefly explain whether this code change requires a detailed review or not, and why
+Briefly explain whether this code change requires a detailed review or not, and why.
 </review_decision>
 
 If a detailed review is warranted, provide your review as follows:
 
 <critical_issues>
 Highlight the most critical issues (if any) in these categories:
-1. Bugs and errors
-2. Code quality and maintainability
-3. Performance concerns
-4. Security vulnerabilities
+1. Design: Does the code integrate well with the existing system?
+2. Functionality: Does the code do what it's intended to do?
+3. Complexity: Is the code more complex than necessary?
+4. Tests: Are there appropriate unit tests?
+5. Naming: Are clear names used for variables, classes, and functions?
+6. Comments: Are comments clear and useful, explaining why rather than what?
+7. Style: Does the code follow the style guide?
+8. Consistency: Is the code consistent with the rest of the codebase?
 Prioritize the most important findings. If no issues are found in a category, omit it.
 </critical_issues>
 
@@ -361,12 +365,14 @@ Prioritize the most important findings. If no issues are found in a category, om
 Provide 1-3 actionable, high-impact suggestions for improving the code. Include brief code snippets if helpful.
 </recommendations>
 
-Please ensure your review is concise, focused on the most important aspects, and stays within 200 words. If you need any clarification about the code, please ask before proceeding with the review. Note the XML tag <review_decision>, <critical_issues>, <recommendations> should not be included in the review comments.
+Remember to look for good things in the CL and offer encouragement. If you need any clarification about the code, please ask before proceeding with the review.
+
+All the content inside <review_decision>, <critical_issues>, <recommendations> tags are only for internal processing and should not be included in the review comments. The output length should be within 100 words.
 `
 
 const concise_review_prompt_revised = 
 `
-You are an expert code reviewer. Review the following code snippet concisely, focusing on critical issues. Keep your response within 200 words.
+You are an expert code reviewer. Review the following code snippet concisely, focusing on critical issues. Keep your response within 50 words.
 
 <code>
 {{CODE_SNIPPET}}
@@ -380,18 +386,17 @@ If detailed review is needed:
 
 <critical_issues>
 Highlight top 1-3 issues in order of importance:
-1. Bugs/errors
-2. Code quality
-3. Performance
-4. Security
+1. Design/Functionality
+2. Code quality/Complexity
+3. Tests/Security
 Omit categories with no issues.
 </critical_issues>
 
 <recommendations>
-Provide 1-3 high-impact suggestions. Include brief code snippets if helpful.
+Provide 1-2 high-impact suggestions. Include brief code snippets if helpful.
 </recommendations>
 
-If clarification is needed, ask before reviewing. Note the XML tag <review_decision>, <critical_issues>, <recommendations> should not be included in the review comments.
+If clarification is needed, ask before reviewing. Note the XML tags should not be included in the review comments.
 `
 
 // Refer to https://google.github.io/eng-practices/review/reviewer/looking-for.html and https://google.github.io/eng-practices/review/reviewer/standard.html
@@ -604,8 +609,8 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
 
       const fileContent = changedLines.join('\n');
       // two options for review level: detailed and concise
-      const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
-      let formattedContent = promptTemplate.replace('[Insert the code change to be reviewed, including file names and line numbers if applicable]', fileContent);
+      const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt_revised : detailed_review_prompt_revised;
+      let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', fileContent);
 
       // invoke model to generate review comments
       var review = await invokeModel(bedrockClient, modelId, formattedContent);  
