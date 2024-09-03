@@ -272,6 +272,10 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+#### Using model hosted on Amazon SageMaker
+
+Instead of using the default model with Amazon Bedrock, you can also use your own model hosted on Amazon SageMaker. Refer to the sample notebook [Here](./notebook/llama2-13b.ipynb) to host your own model on Amazon SageMaker along with API Gateway to expose the RESTful endpoint, then use the model id prefixed with `sagemaker.<api url>` in the action options.
+
 ### Step 3 (Optional): Create the GitHub App to perform issue operation
 Go to app folder, run `npm run start` to start the server (make sure it have the network connection to receive GitHub events and previlege to access the Amazon Bedrock), then login to your GitHub, navigate to Settings -> Developer settings -> GitHub Apps -> New GitHub App, or click [here](https://github.com/settings/apps/new) to create a new GitHub App, fill in the required fields, and set the webhook URL to your server address http:<IP address>:3000/webhook, then click `Create GitHub App`.
 
