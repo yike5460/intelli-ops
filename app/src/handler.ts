@@ -125,7 +125,7 @@ export async function handleReviewComment(event: WebhookEvent, octokit: Octokit)
         repo: repository.name,
         title: `Follow-up from PR #${pull_request.number}`,
         body: `This issue was created as a follow-up to the discussion in PR #${pull_request.number}.\n\nOriginal comment: ${comment.body}`
-      });
+    });
       await octokit.pulls.createReplyForReviewComment({
         owner: repository.owner.login,
         repo: repository.name,
