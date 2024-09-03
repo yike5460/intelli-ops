@@ -1,5 +1,5 @@
-name: 'Intelligent Code Review using AWS Bedrock'
-description: 'Perform code review using AWS Bedrock API'
+name: 'Intelligent DevOps (Intelli-Ops) using Amazon Bedrock'
+description: 'Intelli-Ops is a powerful GitHub Action that leverages AWS Bedrock's AI capabilities to automate code reviews, generate PR descriptions, create unit tests, and enhance issue management. This action seamlessly integrates AI-driven assistance into your development workflow, helping teams improve code quality, save time on routine tasks, and boost overall productivity.'
 inputs:
   github-token:
     description: 'GitHub token'
