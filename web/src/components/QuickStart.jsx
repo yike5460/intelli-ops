@@ -94,43 +94,29 @@ Resources:
 Outputs:
   Role:
     Value: !GetAtt Role.Arn`} />
-
-          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">2. Configuring AWS Credentials</h3>
-          <p className="mb-4 text-gray-600">Add the following to your GitHub Actions workflow file, note to replace the role-to-assume with the role you created in the previous step:</p>
-          <FoldableCommand title="AWS Credentials Configuration" command={`- name: Configure AWS Credentials
-  uses: aws-actions/configure-aws-credentials@v4
-  with:
-    role-to-assume: arn:aws:iam::123456789012:role/role-name
-    aws-region: us-east-1`} />
-
-          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">3. Clone and Publish the Action</h3>
-          <p className="mb-4 text-gray-600">Before using the Intelli-Ops GitHub Action, you need to clone the repository and publish a release:</p>
-          <FoldableCommand title="Clone and Publish the Action" command={`git clone https://github.com/yike5460/intelli-ops.git
-cd intelli-ops
-version="stable"
-git tag -a $version -m "Release version $version"
-git push origin $version
-gh release create $version -t "$version" -n ""`} />
-          <p className="mt-2 mb-4 text-gray-600">Make sure to replace "your-username" with your actual GitHub username and adjust the version number as needed.</p>
-
-          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">4. Using Intelli-Ops GitHub Action</h3>
-          <p className="mb-4 text-gray-600">After publishing the release, add the following to your workflow file:</p>
-          <FoldableCommand title="Using Intelli-Ops GitHub Action" command={`- name: Code review using AWS Bedrock
-  uses: your-username/intelli-ops@0.0.31
-  with:
-    github-token: \${{ secrets.GITHUB_TOKEN }}
-    aws-region: us-east-1
-    model-id: anthropic.claude-3-sonnet-20240229-v1:0
-    exclude-files: '*.md,*.json'
-    review-level: 'concise'
-    generate-pr-description: 'true'
-  env:
-    GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}`} />
-          <p className="mt-2 mb-4 text-gray-600">Remember to replace "your-username" with your GitHub username and adjust the version number if necessary.</p>
-
-          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">5. Full Workflow Sample</h3>
-          <p className="mb-4 text-gray-600">Here's a complete workflow sample that you can use as a reference:</p>
-          <FoldableCommand title="Full Workflow Sample" command={`name: Intelligent Code Review
+          <p className="mt-2 mb-4 text-gray-600">
+            Add the least privilege permission to invoke the Aamazon Bedrock API to the role:
+          </p>
+          <FoldableCommand title="Amazon Bedrock Policy" command={`{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "bedrock:InvokeModel",
+                "bedrock:ListFoundationModels",
+                "bedrock:GetFoundationModel"
+            ],
+            "Resource": "*"
+        }
+    ]
+}`} />
+          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">2. Setting up the GitHub Actions</h3>
+          <p className="mb-4 text-gray-600">
+            Here's a complete workflow sample that includes configuring AWS credentials and using the Intelli-Ops GitHub Action. 
+            Make sure to replace the `role-to-assume` ARN with your actual IAM role ARN created in step 1, and adjust other parameters as needed:
+          </p>
+          <FoldableCommand title="Complete Workflow Sample" command={`name: Intelligent Code Review
 on:
   workflow_dispatch:
   pull_request:
@@ -194,9 +180,23 @@ jobs:
         generate-unit-test-suite: 'true'
       env:
         GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}`} />
-          <p className="mt-2 mb-4 text-gray-600">Make sure to replace the `role-to-assume` ARN with your actual IAM role ARN.</p>
+          <p className="mt-2 mb-4 text-gray-600">
+            This workflow includes steps for checking out the code, setting up Node.js, installing dependencies, 
+            configuring AWS credentials, and running the Intelli-Ops GitHub Action. Adjust the parameters in the 
+            "Intelligent GitHub Actions" step as needed for your specific use case.
+          </p>
 
-          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">6. Starting the GitHub App Server</h3>
+          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">3. Customize Your Own (Optional)</h3>
+          <p className="mb-4 text-gray-600">Before using the Intelli-Ops GitHub Action, you need to clone the repository and publish a release:</p>
+          <FoldableCommand title="Clone and Publish the Action" command={`git clone https://github.com/yike5460/intelli-ops.git
+cd intelli-ops
+version="stable"
+git tag -a $version -m "Release version $version"
+git push origin $version
+gh release create $version -t "$version" -n ""`} />
+          <p className="mt-2 mb-4 text-gray-600">Make sure to replace "your-username" with your actual GitHub username and adjust the version number as needed.</p>
+
+          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">4. Starting the GitHub App Server</h3>
           <p className="mb-4 text-gray-600">Before interacting with the GitHub App, you need to start the server that handles user requests:</p>
           <FoldableCommand title="Starting the GitHub App Server" command={`cd app
 npm install
@@ -205,7 +205,7 @@ npm run start`} />
             This will start the server locally. For a more stable user experience, consider hosting the code as a container or daemon process in a separate infrastructure.
           </p>
 
-          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">7. Interacting with GitHub App</h3>
+          <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">5. Interacting with GitHub App</h3>
           <p className="mb-4 text-gray-600">Once the server is running, you can interact with the GitHub App by commenting on pull requests. Here are some example commands:</p>
           <ul className="list-disc list-inside mb-4 text-gray-600">
             <li>@intellibotdemo generate interesting stats about this repository and render them as a table.</li>
