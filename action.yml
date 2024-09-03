@@ -35,3 +35,7 @@ inputs:
 runs:
   using: 'node20'
   main: 'dist/index.js'
+
+branding:
+  color: 'purple'
+  icon: 'check-circle'
