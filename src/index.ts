@@ -410,7 +410,7 @@ Maintain a constructive and educational tone. Be thorough but not overly pedanti
 </tone_context>
 
 <code_change>
-[Insert the code change to be reviewed, including file names and line numbers if applicable]
+{{CODE_SNIPPET}}
 </code_change>
 
 <detailed_task_description>
@@ -442,7 +442,7 @@ Provide feedback on these aspects, categorizing your comments as follows:
 7. If relevant, mention any educational points that could help the developer learn, prefixed with "Learning opportunity:".
 </rules>
 
-If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, Suggestions, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 200 words.
+If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, Suggestions, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 100 words.
 
 <output_format>
 Summary:
@@ -469,7 +469,7 @@ Maintain a constructive and educational tone. Be thorough but not overly pedanti
 </tone_context>
 
 <code_change>
-[Insert the code change to be reviewed, including file names and line numbers if applicable]
+{{CODE_SNIPPET}}
 </code_change>
 
 <detailed_task_description>
@@ -494,7 +494,7 @@ Provide feedback on these aspects, categorizing your comments as follows:
 5. If suggesting an alternative approach, briefly explain its benefits.
 </rules>
 
-If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 100 words.
+If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 50 words.
 
 <output_format>
 Summary:
@@ -609,7 +609,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
 
       const fileContent = changedLines.join('\n');
       // two options for review level: detailed and concise
-      const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt_revised : detailed_review_prompt_revised;
+      const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
       let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', fileContent);
 
       // invoke model to generate review comments

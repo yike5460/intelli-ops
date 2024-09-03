@@ -307,7 +307,7 @@ async function generateUnitTestsSuite(client, modelId, octokit, repo) {
         }
     }
 }
-const detailed_review_prompt_revised = `
+const detailed_review_prompt_revised = (/* unused pure expression or super */ null && (`
 You are an expert code reviewer tasked with improving the overall code health of the system. Your primary goal is to ensure that the code change (CL) definitely improves the codebase, even if it's not perfect. Review the following code snippet and provide focused feedback on the most critical aspects.
 
 Here is the code to review:
@@ -348,8 +348,8 @@ Provide 1-3 actionable, high-impact suggestions for improving the code. Include 
 Remember to look for good things in the CL and offer encouragement. If you need any clarification about the code, please ask before proceeding with the review.
 
 All the content inside <review_decision>, <critical_issues>, <recommendations> tags are only for internal processing and should not be included in the review comments. The output length should be within 100 words.
-`;
-const concise_review_prompt_revised = `
+`));
+const concise_review_prompt_revised = (/* unused pure expression or super */ null && (`
 You are an expert code reviewer. Review the following code snippet concisely, focusing on critical issues. Keep your response within 50 words.
 
 <code>
@@ -375,9 +375,9 @@ Provide 1-2 high-impact suggestions. Include brief code snippets if helpful.
 </recommendations>
 
 If clarification is needed, ask before reviewing. Note the XML tags should not be included in the review comments.
-`;
+`));
 // Refer to https://google.github.io/eng-practices/review/reviewer/looking-for.html and https://google.github.io/eng-practices/review/reviewer/standard.html
-const detailed_review_prompt = (/* unused pure expression or super */ null && (`<task_context>
+const detailed_review_prompt = `<task_context>
 You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress. Your feedback should be constructive, educational, and focused on the most important issues.
 </task_context>
 
@@ -386,7 +386,7 @@ Maintain a constructive and educational tone. Be thorough but not overly pedanti
 </tone_context>
 
 <code_change>
-[Insert the code change to be reviewed, including file names and line numbers if applicable]
+{{CODE_SNIPPET}}
 </code_change>
 
 <detailed_task_description>
@@ -418,7 +418,7 @@ Provide feedback on these aspects, categorizing your comments as follows:
 7. If relevant, mention any educational points that could help the developer learn, prefixed with "Learning opportunity:".
 </rules>
 
-If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, Suggestions, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 200 words.
+If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, Suggestions, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 100 words.
 
 <output_format>
 Summary:
@@ -433,8 +433,8 @@ Improvements:
 Suggestions:
 [List any minor suggestions]
 </output_format>
-`));
-const concise_review_prompt = (/* unused pure expression or super */ null && (`<task_context>
+`;
+const concise_review_prompt = `<task_context>
 You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress. Your feedback should be constructive, educational, and focused on the most important issues.
 </task_context>
 
@@ -443,7 +443,7 @@ Maintain a constructive and educational tone. Be thorough but not overly pedanti
 </tone_context>
 
 <code_change>
-[Insert the code change to be reviewed, including file names and line numbers if applicable]
+{{CODE_SNIPPET}}
 </code_change>
 
 <detailed_task_description>
@@ -468,7 +468,7 @@ Provide feedback on these aspects, categorizing your comments as follows:
 5. If suggesting an alternative approach, briefly explain its benefits.
 </rules>
 
-If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 100 words.
+If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 50 words.
 
 <output_format>
 Summary:
@@ -480,7 +480,7 @@ Critical Issues:
 Improvements:
 [List potential improvements]
 </output_format>
-`));
+`;
 async function invokeModel(client, modelId, payloadInput) {
     try {
         // seperate branch to invoke RESTFul endpoint exposed by API Gateway, if the modelId is prefixed with string like "sagemaker.<api id>.execute-api.<region>.amazonaws.com/prod"
@@ -568,7 +568,7 @@ async function generateCodeReviewComment(bedrockClient, modelId, octokit, exclud
                 continue;
             const fileContent = changedLines.join('\n');
             // two options for review level: detailed and concise
-            const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt_revised : detailed_review_prompt_revised;
+            const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
             let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', fileContent);
             // invoke model to generate review comments
             var review = await invokeModel(bedrockClient, modelId, formattedContent);
