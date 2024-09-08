@@ -23,6 +23,10 @@ inputs:
   code-review:
     description: 'Code review'
     required: false
+  output-language:
+    description: 'Output language'
+    required: false
+    default: 'en'
   generate-pr-description:
     description: 'Generate PR description'
     required: false
