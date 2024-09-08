@@ -588,7 +588,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
       await octokit.rest.pulls.createReview({
         ...repo,
         pull_number: pullRequest.number,
-        // commit_id: pullRequest.head.sha,
+        commit_id: pullRequest.head.sha,
         body: 'Code review comments',
         event: 'COMMENT',
         comments: reviewComments,
