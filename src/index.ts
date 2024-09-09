@@ -538,6 +538,10 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
     // +This is the new line 1.
     //  This is an unchanged line.
     // @@ is the hunk header that shows where the changes are and how many lines are changed. In this case, it indicates that the changes start at line 1 of the old file and affect 3 lines, and start at line 1 of the new file and affect 2 lines.
+    
+    // print the file patch content to console
+    console.log(`File patch content: ${file.patch} for file: ${file.filename}`);
+
     if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
       console.log(`Reviewing file: ${file.filename}`);
 
