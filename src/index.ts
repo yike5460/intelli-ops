@@ -588,6 +588,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
   }
 
   if (reviewComments.length > 0) {
+    console.log(`Code review comments before posting: ${reviewComments}`);
     try {
       await octokit.rest.pulls.createReview({
         ...repo,
