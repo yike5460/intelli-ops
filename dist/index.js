@@ -502,38 +502,56 @@ async function generateCodeReviewComment(bedrockClient, modelId, octokit, exclud
         // print the file patch content to console
         console.log(`File patch content: ${file.patch} for file: ${file.filename}`);
         if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
-            console.log(`Reviewing file: ${file.filename}`);
-            const changedLines = file.patch
-                .split('\n')
-                .filter(line => line.startsWith('+') && !line.startsWith('+++'))
-                .map(line => line.substring(1));
-            if (changedLines.length === 0)
-                continue;
-            const fileContent = changedLines.join('\n');
-            // two options for review level: detailed and concise
-            const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
-            let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', fileContent);
-            // get the actual language name from the language code
-            const languageName = languageCodeToName[outputLanguage] || 'English'; // Default to English if the language code is not found
-            if (!(outputLanguage in languageCodeToName)) {
-                core.warning(`Unsupported output language: ${outputLanguage}. Defaulting to English.`);
-            }
-            formattedContent = formattedContent.replace('{{LANGUAGE_NAME}}', languageName);
-            // invoke model to generate review comments
-            var review = await invokeModel(bedrockClient, modelId, formattedContent);
-            // log the generated review comments and check if it is empty
-            // console.log(`Review comments ${review} generated for file: ${file.filename} with file content: ${fileContent}`);
-            if (!review || review.trim() == '') {
-                console.warn(`No review comments generated for file ${file.filename}, skipping`);
-                continue;
-            }
-            const position = file.patch.split('\n').findIndex(line => line.startsWith('+') && !line.startsWith('+++')) + 1;
-            if (position > 0) {
-                reviewComments.push({
-                    path: file.filename,
-                    position: position,
-                    body: review,
-                });
+            // To handle multiple hunks in a single file, e.g. the file patch content is like:
+            const hunks = file.patch.split(/^@@/m).slice(1);
+            console.log(`Hunks ${hunks} for file: ${file.filename}`);
+            let totalPosition = 0;
+            for (const [hunkIndex, hunk] of hunks.entries()) {
+                const hunkLines = hunk.split('\n').slice(1);
+                const changedLines = hunkLines
+                    .filter(line => line.startsWith('+') && !line.startsWith('+++'))
+                    .map(line => line.substring(1));
+                if (changedLines.length === 0)
+                    continue;
+                const fileContent = changedLines.join('\n');
+                console.log(`File content: ${fileContent}`);
+                // two options for review level: detailed and concise
+                const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
+                let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', fileContent);
+                // get the actual language name from the language code
+                const languageName = languageCodeToName[outputLanguage] || 'English'; // Default to English if the language code is not found
+                if (!(outputLanguage in languageCodeToName)) {
+                    core.warning(`Unsupported output language: ${outputLanguage}. Defaulting to English.`);
+                }
+                formattedContent = formattedContent.replace('{{LANGUAGE_NAME}}', languageName);
+                // invoke model to generate review comments
+                var review = await invokeModel(bedrockClient, modelId, formattedContent);
+                // log the generated review comments and check if it is empty
+                // console.log(`Review comments ${review} generated for file: ${file.filename} with file content: ${fileContent}`);
+                if (!review || review.trim() == '') {
+                    console.warn(`No review comments generated for hunk ${hunkIndex + 1} in file ${file.filename}, skipping`);
+                    continue;
+                }
+                // Calculate the position for this hunk
+                let hunkPosition = totalPosition + 1;
+                for (const line of hunkLines) {
+                    if (line.startsWith('+') && !line.startsWith('+++')) {
+                        // Check if the added line is a comment or actual code
+                        if (file.filename.endsWith('.ts') && !line.trim().startsWith('//') && !line.trim().startsWith('/*')) {
+                            console.log(`Review comments ${review} generated for file: ${file.filename} with position: ${hunkPosition}`);
+                            reviewComments.push({
+                                path: file.filename,
+                                position: hunkPosition,
+                                body: review,
+                            });
+                            break;
+                        }
+                    }
+                    if (!line.startsWith('-')) {
+                        hunkPosition++;
+                    }
+                }
+                totalPosition += hunkLines.length;
             }
         }
         else {
