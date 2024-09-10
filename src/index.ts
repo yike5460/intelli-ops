@@ -575,7 +575,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
         var review = await invokeModel(bedrockClient, modelId, formattedContent);  
 
         // log the generated review comments and check if it is empty
-        // console.log(`Review comments ${review} generated for file: ${file.filename} with file content: ${fileContent}`);
+        console.log(`Review comments ${review} generated for file: ${file.filename} in hunk ${hunkIndex} with file content: ${fileContent}`);
 
         if (!review || review.trim() == '') {
           console.warn(`No review comments generated for hunk ${hunkIndex} in file ${file.filename}, skipping`);
