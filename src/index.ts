@@ -543,20 +543,23 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
     console.log(`File patch content: ${file.patch} for file: ${file.filename}`);
 
     if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
-      // To handle multiple hunks in a single file, e.g. the file patch content is like:
-      const hunks = file.patch.split(/^@@/m).slice(1);
-      console.log(`Hunks ${hunks} for file: ${file.filename}`);
+
+      // Split the patch into hunks
+      const hunks = file.patch.split(/^@@\s+-\d+,\d+\s+\+\d+,\d+\s+@@/m);
       let totalPosition = 0;
+
       for (const [hunkIndex, hunk] of hunks.entries()) {
-        const hunkLines = hunk.split('\n').slice(1);
+        if (hunkIndex === 0) continue; // Skip the first element (it's empty due to the split)
+        const hunkLines = hunk.split('\n').slice(1); // Remove the hunk header
         const changedLines = hunkLines
           .filter(line => line.startsWith('+') && !line.startsWith('+++'))
           .map(line => line.substring(1));
+        console.log(`debugging: Hunk ${hunkIndex} content: ${hunk} with changed lines: ${changedLines}`);
 
         if (changedLines.length === 0) continue;
 
         const fileContent = changedLines.join('\n');
-        console.log(`File content: ${fileContent}`);
+
         // two options for review level: detailed and concise
         const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
         let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', fileContent);
@@ -575,7 +578,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
         // console.log(`Review comments ${review} generated for file: ${file.filename} with file content: ${fileContent}`);
 
         if (!review || review.trim() == '') {
-          console.warn(`No review comments generated for hunk ${hunkIndex + 1} in file ${file.filename}, skipping`);
+          console.warn(`No review comments generated for hunk ${hunkIndex} in file ${file.filename}, skipping`);
           continue;
         }
 
