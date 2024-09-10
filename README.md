@@ -162,8 +162,9 @@ Create a GitHub Actions workflow file in your repository .github/workflows direc
     github-token: ${{ secrets.GITHUB_TOKEN }}
     aws-region: us-east-1
     model-id: anthropic.claude-3-sonnet-20240229-v1:0
-    exclude-files: '*.md,*.json'
-    review-level: 'concise'
+    generate-code-review-exclude-files: '*.md,*.json'
+    generate-code-review-level: 'detailed'
+    generate-code-review: 'true'
     generate-pr-description: 'true'
     env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -176,11 +177,12 @@ Create a GitHub Actions workflow file in your repository .github/workflows direc
 | `github-token` | GitHub token for API access | N/A | Yes |
 | `aws-region` | AWS region for Bedrock | us-east-1 | Yes |
 | `model-id` | ID of the model to use for code reviews | `anthropic.claude-3-sonnet-20240229-v1:0` | Yes |
-| `exclude-files` | Comma-separated list of file patterns to exclude | N/A | No |
-| `review-level` | Level of detail for reviews ('detailed' or 'concise') | `'concise'` | No |
-| `code-review` | Whether to perform code reviews | `'false'` | No |
+| `generate-code-review-exclude-files` | Comma-separated list of file patterns to exclude | N/A | No |
+| `generate-code-review-level` | Level of detail for reviews ('detailed' or 'concise') | `'concise'` | No |
+| `generate-code-review` | Whether to perform code reviews | `'false'` | No |
 | `generate-pr-description` | Whether to generate PR descriptions | `'false'` | No |
-| `generate-unit-test-suite` | Whether to generate unit test suite | `'false'` | No |
+| `generate-unit-test` | Whether to generate unit test suite | `'false'` | No |
+| `output-language` | Language for output | `'en'` | No |
 
 #### Configuring AWS Credentials
 
@@ -263,11 +265,12 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         aws-region: us-east-1
         model-id: anthropic.claude-3-sonnet-20240229-v1:0
-        exclude-files: '*.md,*.json,*.yml,*.yaml'
-        review-level: 'concise'
-        code-review: 'true'
+        generate-code-review-exclude-files: '*.md,*.json,*.yml,*.yaml'
+        generate-code-review-level: 'detailed'
+        generate-code-review: 'true'
         generate-pr-description: 'true'
-        generate-unit-test-suite: 'true'
+        generate-unit-test: 'true'
+        output-language: 'en'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -291,7 +294,7 @@ npm run package
 
 # commit & push the changes
 git add .
-git commit -am "Release version $version"
+git commit -m "Release version $version"
 git push
 
 # release the action package

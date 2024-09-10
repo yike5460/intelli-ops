@@ -385,7 +385,6 @@ Provide feedback on these aspects, categorizing your comments as follows:
 
 If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, Suggestions, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 100 words, the output language should be {{LANGUAGE_NAME}}, and follow the output format below.
 
-<output_format>
 Summary:
 Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below
 
@@ -397,7 +396,6 @@ List potential improvements, mandatory to include if the summary is "Approve wit
 
 Suggestions:
 List any minor suggestions, optional to include
-</output_format>
 `;
 
 const concise_review_prompt =
@@ -437,7 +435,6 @@ Provide feedback on these aspects, categorizing your comments as follows:
 
 If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 50 words. The output language should be {{LANGUAGE_NAME}}, and follow the output format below.
 
-<output_format>
 Summary:
 Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below
 
@@ -446,7 +443,6 @@ List any critical issues that need to be addressed, mandatory to include if the 
 
 Improvements:
 List potential improvements, mandatory to include if the summary is "Approve with minor modifications"
-</output_format>
 `;
 
 export async function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string): Promise<string> {
@@ -495,7 +491,7 @@ export async function invokeModel(client: BedrockRuntimeClient, modelId: string,
     };
 
     const command = new InvokeModelCommand({
-      // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+      // modelId: "anthropic.claude-3-5-sonnet-20240620-v1:0"
       modelId: modelId,
       contentType: "application/json",
       body: JSON.stringify(payload),
@@ -561,7 +557,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
         const fileContent = changedLines.join('\n');
 
         // two options for review level: detailed and concise
-        const promptTemplate = reviewLevel === 'concise' ? concise_review_prompt : detailed_review_prompt;
+        const promptTemplate = reviewLevel === 'detailed' ? detailed_review_prompt : concise_review_prompt;
         let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', fileContent);
 
         // get the actual language name from the language code
@@ -638,12 +634,12 @@ async function run(): Promise<void> {
     const githubToken = core.getInput('github-token');
     const awsRegion = core.getInput('aws-region');
     const modelId = core.getInput('model-id');
-    const excludeFiles = core.getInput('exclude-files');
-    const reviewLevel = core.getInput('review-level');
-    const codeReview = core.getInput('code-review');
+    const excludeFiles = core.getInput('generate-code-review-exclude-files');
+    const reviewLevel = core.getInput('generate-code-review-level');
+    const generateCodeReview = core.getInput('generate-code-review');
+    const generatePrDescription = core.getInput('generate-pr-description');
+    const generateUnitTest = core.getInput('generate-unit-test');
     const outputLanguage = core.getInput('output-language');
-    const generatePRDesc = core.getInput('generate-pr-description');
-    const generateUnitTestSuite = core.getInput('generate-unit-test-suite');
 
     const excludePatterns = excludeFiles ? excludeFiles.split(',').map(p => p.trim()) : [];
 
@@ -651,11 +647,11 @@ async function run(): Promise<void> {
     console.log(`AWS Region: ${awsRegion}`);
     console.log(`Model ID: ${modelId}`);
     console.log(`Excluded files: ${excludeFiles}`);
-    console.log(`Code review: ${codeReview}`);
+    console.log(`Code review: ${generateCodeReview}`);
     console.log(`Output language: ${outputLanguage}`);
     console.log(`Review level: ${reviewLevel}`);
-    console.log(`Generate PR description: ${generatePRDesc.toLowerCase() === 'true' ? 'true' : 'false'}`);
-    console.log(`Generate unit test suite: ${generateUnitTestSuite.toLowerCase() === 'true' ? 'true' : 'false'}`);
+    console.log(`Generate PR description: ${generatePrDescription.toLowerCase() === 'true' ? 'true' : 'false'}`);
+    console.log(`Generate unit test suite: ${generateUnitTest.toLowerCase() === 'true' ? 'true' : 'false'}`);
     if (!githubToken) {
       throw new Error('GitHub token is not set');
     }
@@ -674,17 +670,17 @@ async function run(): Promise<void> {
     console.log(`Reviewing PR #${pullRequest.number} in ${repo.owner}/${repo.repo}`);
 
     // branch to generate PR description
-    if (generatePRDesc.toLowerCase() === 'true') {
+    if (generatePrDescription.toLowerCase() === 'true') {
       await generatePRDescription(bedrockClient, modelId, octokit);
     }
 
     // branch to generate unit tests suite
-    if (generateUnitTestSuite.toLowerCase() === 'true') {
+    if (generateUnitTest.toLowerCase() === 'true') {
       await generateUnitTestsSuite(bedrockClient, modelId, octokit, repo);
     }
 
     // branch to generate code review comments
-    if (codeReview.toLowerCase() === 'true') {
+    if (generateCodeReview.toLowerCase() === 'true') {
       // Wait for a fixed amount of time (e.g., 5 seconds)
       // const delayMs = 5000; // 5 seconds
       // console.log(`Waiting ${delayMs}ms for GitHub to process the changes...`);

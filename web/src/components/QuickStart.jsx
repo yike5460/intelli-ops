@@ -173,12 +173,13 @@ jobs:
       with:
         github-token: \${{ secrets.GITHUB_TOKEN }}
         aws-region: us-east-1
-        model-id: anthropic.claude-3-sonnet-20240229-v1:0
-        exclude-files: '*.md,*.json,*.yml,*.yaml'
-        review-level: 'concise'
-        code-review: 'true'
+        model-id: anthropic.claude-3-5-sonnet-20240620-v1:0
+        generate-code-review: 'true'
+        generate-code-review-level: 'detailed'
+        generate-code-review-exclude-files: '*.md,*.json,*.yml,*.yaml'
         generate-pr-description: 'true'
-        generate-unit-test-suite: 'true'
+        generate-unit-test: 'true'
+        output-language: 'en'
       env:
         GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}`} />
             <p className="mt-2 mb-4 text-gray-600">

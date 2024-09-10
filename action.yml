@@ -13,28 +13,28 @@ inputs:
     required: false
     # Use specific prefix sagemaker.<api url> to specify the model hosted in AWS SageMaker
     default: 'anthropic.claude-3-5-sonnet-20240620-v1:0'
-  exclude-files:
+  generate-code-review-exclude-files:
     description: 'Exclude file list, separated by comma, e.g. [*.md,*.json]'
     required: false
-  review-level:
-    description: 'Review level'
+  generate-code-review-level:
+    description: 'Code review level'
     required: false
     default: 'detailed'
-  code-review:
-    description: 'Code review'
+  generate-code-review:
+    description: 'Generate code review'
     required: false
-  output-language:
-    description: 'Output language'
-    required: false
-    default: 'en'
   generate-pr-description:
     description: 'Generate PR description'
     required: false
     default: 'false'
-  generate-unit-test-suite:
+  generate-unit-test:
     description: 'Generate unit test'
     required: false
     default: 'false'
+  output-language:
+    description: 'Output language'
+    required: false
+    default: 'en'
 # The index.js file in the intelligent-code-review action no longer needs to explicitly set AWS credentials. It will use the credentials set up by the configure-aws-credentials action
 runs:
   using: 'node20'

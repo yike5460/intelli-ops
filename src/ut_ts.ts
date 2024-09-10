@@ -88,7 +88,7 @@ export async function generateUnitTests(client: BedrockRuntimeClient, modelId: s
       };
 
     const command = new InvokeModelCommand({
-        // modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+        // modelId: "anthropic.claude-3-5-sonnet-20240620-v1:0",
         modelId: modelId,
         contentType: "application/json",
         body: JSON.stringify(payload),
