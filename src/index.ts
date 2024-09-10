@@ -587,7 +587,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
         for (const line of hunkLines) {
           if (line.startsWith('+') && !line.startsWith('+++')) {
             // Check if the added line is a comment or actual code
-            if (file.filename.endsWith('.ts') && !line.trim().startsWith('//') && !line.trim().startsWith('/*')) {
+            if (!line.trim().startsWith('//') && !line.trim().startsWith('/*')) {
               console.log(`Review comments ${review} generated for file: ${file.filename} with position: ${hunkPosition}`);
               reviewComments.push({
                 path: file.filename,
