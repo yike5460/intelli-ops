@@ -65,7 +65,7 @@ jobs:
         exclude-files: '*.md,*.json'
         review-level: 'detailed'
         code-review: 'true'
-        output-language: 'zh'
+        # output-language: 'zh'
         generate-pr-description: 'true'
         generate-unit-test-suite: 'false'
       env:
