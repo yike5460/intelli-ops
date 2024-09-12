@@ -134,14 +134,21 @@ async function generatePRDescription(client, modelId, octokit) {
     });
     const fileNameAndStatus = await Promise.all(files.map(async (file) => {
         try {
-            const { data: content } = await octokit.rest.repos.getContent({
-                ...repo,
-                path: file.filename,
-                ref: pullRequest.head.sha,
-            });
-            const { added, removed } = calculateFilePatchNumLines(file.patch);
-            statsSummary.push({ file: file.filename, added: added, removed: removed });
-            return `${file.filename}: ${file.status}`;
+            if (file.status === 'removed') {
+                const { added, removed } = calculateFilePatchNumLines(file.patch);
+                statsSummary.push({ file: file.filename, added: 0, removed: removed });
+                return `${file.filename}: removed`;
+            }
+            else {
+                const { data: content } = await octokit.rest.repos.getContent({
+                    ...repo,
+                    path: file.filename,
+                    ref: pullRequest.head.sha,
+                });
+                const { added, removed } = calculateFilePatchNumLines(file.patch);
+                statsSummary.push({ file: file.filename, added: added, removed: removed });
+                return `${file.filename}: ${file.status}`;
+            }
         }
         catch (error) {
             if (error.status === 404) {
