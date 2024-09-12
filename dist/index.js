@@ -166,21 +166,22 @@ async function generatePRDescription(client, modelId, octokit) {
     const prDescription = await invokeModel(client, modelId, payloadInput);
     const fixedDescription = `
 
-  ## File Status Summary
-  The file changes summary is as follows:
-  File number involved in this PR: {{FILE_NUMBER}}
-  File changes summary:
-  {{FILE_CHANGE_SUMMARY}}
+## File Status Summary
+The file changes summary is as follows:
+File number involved in this PR: {{FILE_NUMBER}}
+File changes summary:
+{{FILE_CHANGE_SUMMARY}}
   `;
     const fileChangeSummary = statsSummary.map(file => `${file.file}: ${file.added} added, ${file.removed} removed`).join('\n');
     const fileNumber = statsSummary.length.toString();
     console.log(`File number involved in this PR: ${fileNumber}`);
     console.log(`File changes summary: ${fileChangeSummary}`);
-    fixedDescription.replace('{{FILE_CHANGE_SUMMARY}}', fileChangeSummary);
-    fixedDescription.replace('{{FILE_NUMBER}}', fileNumber);
-    console.log(`debugging: fixedDescription: ${fixedDescription}`);
+    const updatedDescription = fixedDescription
+        .replace('{{FILE_CHANGE_SUMMARY}}', fileChangeSummary)
+        .replace('{{FILE_NUMBER}}', fileNumber);
+    console.log(`debugging: fixedDescription: ${updatedDescription}`);
     // append fixed template content to the generated PR description
-    const prDescriptionWithStats = prDescription + fixedDescription;
+    const prDescriptionWithStats = prDescription + updatedDescription;
     await octokit.rest.pulls.update({
         ...repo,
         pull_number: pullRequest.number,
