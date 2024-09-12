@@ -5,9 +5,6 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 // current we support typescript and python, while the python library is not available yet, we will use typescript as the default language
 // using abosolute path to import the functions from ut_ts.ts
 import { generateUnitTests, runUnitTests, generateTestReport } from '@/src/ut_ts';
-import { execSync } from 'child_process';
-import * as path from 'path';
-import * as fs from 'fs';
 
 interface PullRequest {
   number: number;
@@ -175,21 +172,17 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
   const fixedDescription =
   `
 
-## File Status Summary
+## File Stats Summary
 The file changes summary is as follows:
-File number involved in this PR: {{FILE_NUMBER}}
-File changes summary:
+- File number involved in this PR: {{FILE_NUMBER}}
+- File changes summary:
 {{FILE_CHANGE_SUMMARY}}
   `
   const fileChangeSummary = statsSummary.map(file => `${file.file}: ${file.added} added, ${file.removed} removed`).join('\n');
   const fileNumber = statsSummary.length.toString();
-  console.log(`File number involved in this PR: ${fileNumber}`);
-  console.log(`File changes summary: ${fileChangeSummary}`);
   const updatedDescription = fixedDescription
     .replace('{{FILE_CHANGE_SUMMARY}}', fileChangeSummary)
     .replace('{{FILE_NUMBER}}', fileNumber);
-
-  console.log(`debugging: fixedDescription: ${updatedDescription}`);
 
   // append fixed template content to the generated PR description
   const prDescriptionWithStats = prDescription + updatedDescription;

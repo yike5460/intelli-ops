@@ -262,6 +262,9 @@ export async function handleIssueComment(event: WebhookEvent, octokit: Octokit) 
 
             user query: read the files in the src/app package and generate a class diagram using mermaid and a README in the markdown format
             output: src/app
+
+            user query: Generate a class diagram for the files in the app folder and generate a README in the markdown format
+            output: app
             </example>
             `;
             const packagePath = await invokeModel(bedrockClient, modelId, packagePathPrompt);

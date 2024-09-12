@@ -1,7 +1,9 @@
 import { Octokit } from '@octokit/rest';
+import { getOctokit, context } from '@actions/github';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 
-const octokit = new Octokit({ auth: process.env.GITHUB_APP_TOKEN });
+// const octokit = new Octokit({ auth: process.env.GITHUB_APP_TOKEN });
+const octokit = getOctokit(process.env.GITHUB_TOKEN as string);
 const bedrockClient = new BedrockRuntimeClient({ region: 'us-east-1' });
 const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0'; // Replace with your desired model ID
 const unitTestPrompt = "Generate unit tests for the following code: {{SOURCE_CODE}}";
@@ -10,7 +12,7 @@ const unitTestPrompt = "Generate unit tests for the following code: {{SOURCE_COD
 export async function generateUnitTestsPerFile(repoFullName: string, issueNumber: string, fileName: string): Promise<string | undefined> {
   try {
     const [owner, repo] = repoFullName.split('/');
-    const { data: fileContent } = await octokit.repos.getContent({
+    const { data: fileContent } = await octokit.rest.repos.getContent({
       owner,
       repo,
       path: fileName,
@@ -64,7 +66,7 @@ export async function generateUnitTestsPerFile(repoFullName: string, issueNumber
 export async function modularizeFunction(repoFullName: string, branch: string, filePath: string, line: number): Promise<string> {
   try {
     const [owner, repo] = repoFullName.split('/');
-    const { data: fileContent } = await octokit.repos.getContent({
+    const { data: fileContent } = await octokit.rest.repos.getContent({
       owner,
       repo,
       path: filePath,
@@ -100,19 +102,19 @@ export async function generateStats(repoFullName: string): Promise<string> {
     const [owner, repo] = repoFullName.split('/');
 
     // Fetch repository information
-    const { data: repoData } = await octokit.repos.get({ owner, repo });
+    const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
 
     // Fetch commit statistics
-    const { data: commitStats } = await octokit.repos.getCommitActivityStats({ owner, repo });
+    const { data: commitStats } = await octokit.rest.repos.getCommitActivityStats({ owner, repo });
 
     // Fetch language statistics
-    const { data: languageStats } = await octokit.repos.listLanguages({ owner, repo });
+    const { data: languageStats } = await octokit.rest.repos.listLanguages({ owner, repo });
 
     // Calculate total lines of code (rough estimate)
     const totalLinesOfCode = Object.values(languageStats).reduce((sum, count) => sum + count, 0);
 
     // Count TODO comments (this is a simplified approach and may not catch all TODOs)
-    const { data: searchResult } = await octokit.search.code({
+    const { data: searchResult } = await octokit.rest.search.code({
       q: `repo:${repoFullName} TODO`,
     });
     const todoCount = searchResult.total_count;
@@ -154,11 +156,11 @@ export async function findConsoleLogStatements(repoFullName: string): Promise<st
     const [owner, repo] = repoFullName.split('/');
 
     // Get the default branch
-    const { data: repoData } = await octokit.repos.get({ owner, repo });
+    const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
     const defaultBranch = repoData.default_branch;
 
     // Search for console.log statements in the repository
-    const { data: searchResult } = await octokit.search.code({
+    const { data: searchResult } = await octokit.rest.search.code({
       q: `repo:${repoFullName} console.log`,
       per_page: 100 // Adjust this value based on your needs
     });
@@ -171,7 +173,7 @@ export async function findConsoleLogStatements(repoFullName: string): Promise<st
 
     for (const item of searchResult.items) {
       try {
-        const { data: fileContent } = await octokit.repos.getContent({
+        const { data: fileContent } = await octokit.rest.repos.getContent({
           owner,
           repo,
           path: item.path,
@@ -204,52 +206,68 @@ export async function findConsoleLogStatements(repoFullName: string): Promise<st
 
 export async function generateClassDiagram(repoFullName: string, packagePath: string): Promise<string> {
   const [owner, repo] = repoFullName.split('/');
-  console.log('Generating class diagram for repo: ', repoFullName, ' and package path: ', packagePath);
-  // First, check if the directory exists
-  try {
-    const { data: contents } = await octokit.repos.getContent({
-      owner,
-      repo,
-      path: packagePath
-    });
-    if (Array.isArray(contents)) {
-      let classDiagram = "```mermaid\nclassDiagram\n";
-      let classCount = 0;
+  console.log('Generating class diagram for repo:', repoFullName, 'and package path:', packagePath);
 
-      for (const file of contents) {
-        if (file.type === 'file' && file.name.endsWith('.ts')) {
-          const { data: fileContent } = await octokit.repos.getContent({
-            owner,
-            repo,
-            path: file.path
-          });
-          if ('content' in fileContent && typeof fileContent.content === 'string') {
-            const decodedContent = Buffer.from(fileContent.content, 'base64').toString('utf-8');
-            // This is a simplified approach to extract class names
-            const classMatches = decodedContent.match(/class\s+(\w+)/g);
-            if (classMatches) {
-              classMatches.forEach(match => {
-                const className = match.split(' ')[1];
-                classDiagram += `  class ${className}\n`;
-                classCount++;
-              });
+  async function searchDirectory(path: string): Promise<string[]> {
+    try {
+      const { data: contents } = await octokit.rest.repos.getContent({
+        owner,
+        repo,
+        path: path,
+      });
+
+      let classNames: string[] = [];
+
+      if (Array.isArray(contents)) {
+        for (const item of contents) {
+          if (item.type === 'file' && item.name.endsWith('.ts')) {
+            const { data: fileContent } = await octokit.rest.repos.getContent({
+              owner,
+              repo,
+              path: item.path
+            });
+
+            if ('content' in fileContent && typeof fileContent.content === 'string') {
+              const decodedContent = Buffer.from(fileContent.content, 'base64').toString('utf-8');
+              const classMatches = decodedContent.match(/class\s+(\w+)/g);
+              if (classMatches) {
+                classNames = classNames.concat(classMatches.map(match => match.split(' ')[1]));
+              }
             }
+          } else if (item.type === 'dir') {
+            classNames = classNames.concat(await searchDirectory(item.path));
           }
         }
       }
-      classDiagram += "```";
 
-      if (classCount === 0) {
-        return `No classes found in the specified path '${packagePath}'. The directory might not contain any TypeScript files with class definitions.`;
-      }
-      return classDiagram;
-    } else {
-      return `Unable to generate class diagram: '${packagePath}' is not a directory.`;
+      return classNames;
+    } catch (error) {
+      console.error(`Error searching directory ${path}:`, error);
+      return [];
     }
+  }
+
+  try {
+    let classNames = await searchDirectory(packagePath);
+
+    // If no classes found in the specified path, search the entire repository
+    if (classNames.length === 0) {
+      console.log(`No classes found in ${packagePath}. Searching the entire repository.`);
+      classNames = await searchDirectory('');
+    }
+
+    if (classNames.length === 0) {
+      return `No classes found in the repository. The repository might not contain any TypeScript files with class definitions.`;
+    }
+
+    let classDiagram = "```mermaid\nclassDiagram\n";
+    classNames.forEach(className => {
+      classDiagram += `  class ${className}\n`;
+    });
+    classDiagram += "```";
+
+    return classDiagram;
   } catch (error: unknown) {
-    if (error instanceof Error && 'status' in error && error.status === 404) {
-      return `The specified path '${packagePath}' does not exist in the repository. Please check the path and try again.`;
-    }
     console.error('Error generating class diagram:', error);
     return `An error occurred while generating the class diagram: ${error instanceof Error ? error.message : 'Unknown error'}`;
   }
@@ -258,7 +276,7 @@ export async function generateClassDiagram(repoFullName: string, packagePath: st
 export async function debugBotConfig(repoFullName: string): Promise<string> {
   try {
     const [owner, repo] = repoFullName.split('/');
-    const { data: content } = await octokit.repos.getContent({
+    const { data: content } = await octokit.rest.repos.getContent({
       owner,
       repo,
       path: '.github/IBTBot.yml'
