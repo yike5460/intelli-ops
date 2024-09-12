@@ -174,7 +174,7 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
 
   const fixedDescription =
   `
- 
+
   ## File Status Summary
   The file changes summary is as follows:
   File number involved in this PR: {{FILE_NUMBER}}
@@ -187,6 +187,8 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
   console.log(`File changes summary: ${fileChangeSummary}`);
   fixedDescription.replace('{{FILE_CHANGE_SUMMARY}}', fileChangeSummary);
   fixedDescription.replace('{{FILE_NUMBER}}', fileNumber);
+
+  console.log(`debugging: fixedDescription: ${fixedDescription}`);
 
   // append fixed template content to the generated PR description
   const prDescriptionWithStats = prDescription + fixedDescription;
