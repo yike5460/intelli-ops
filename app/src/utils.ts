@@ -133,7 +133,7 @@ export async function generateStats(repoFullName: string): Promise<string> {
 `;
 
     return `
-<!-- This is an auto-generated reply by IntelliBot -->
+<!-- This is an auto-generated reply by IBTBot -->
 > [!TIP]
 > For best results, initiate chat on the files or code changes.
 
@@ -203,16 +203,19 @@ export async function findConsoleLogStatements(repoFullName: string): Promise<st
 }
 
 export async function generateClassDiagram(repoFullName: string, packagePath: string): Promise<string> {
+  const [owner, repo] = repoFullName.split('/');
+  console.log('Generating class diagram for repo: ', repoFullName, ' and package path: ', packagePath);
+  // First, check if the directory exists
   try {
-    const [owner, repo] = repoFullName.split('/');
     const { data: contents } = await octokit.repos.getContent({
       owner,
       repo,
       path: packagePath
     });
-
     if (Array.isArray(contents)) {
       let classDiagram = "```mermaid\nclassDiagram\n";
+      let classCount = 0;
+
       for (const file of contents) {
         if (file.type === 'file' && file.name.endsWith('.ts')) {
           const { data: fileContent } = await octokit.repos.getContent({
@@ -223,21 +226,32 @@ export async function generateClassDiagram(repoFullName: string, packagePath: st
           if ('content' in fileContent && typeof fileContent.content === 'string') {
             const decodedContent = Buffer.from(fileContent.content, 'base64').toString('utf-8');
             // This is a simplified approach to extract class names
-            const classMatch = decodedContent.match(/class\s+(\w+)/);
-            if (classMatch) {
-              classDiagram += `  class ${classMatch[1]}\n`;
+            const classMatches = decodedContent.match(/class\s+(\w+)/g);
+            if (classMatches) {
+              classMatches.forEach(match => {
+                const className = match.split(' ')[1];
+                classDiagram += `  class ${className}\n`;
+                classCount++;
+              });
             }
           }
         }
       }
       classDiagram += "```";
+
+      if (classCount === 0) {
+        return `No classes found in the specified path '${packagePath}'. The directory might not contain any TypeScript files with class definitions.`;
+      }
       return classDiagram;
     } else {
-      return "Unable to generate class diagram: Package path is not a directory.";
+      return `Unable to generate class diagram: '${packagePath}' is not a directory.`;
     }
-  } catch (error) {
+  } catch (error: unknown) {
+    if (error instanceof Error && 'status' in error && error.status === 404) {
+      return `The specified path '${packagePath}' does not exist in the repository. Please check the path and try again.`;
+    }
     console.error('Error generating class diagram:', error);
-    return "An error occurred while generating the class diagram.";
+    return `An error occurred while generating the class diagram: ${error instanceof Error ? error.message : 'Unknown error'}`;
   }
 }
 
@@ -247,17 +261,17 @@ export async function debugBotConfig(repoFullName: string): Promise<string> {
     const { data: content } = await octokit.repos.getContent({
       owner,
       repo,
-      path: '.github/intellibot.yml'
+      path: '.github/IBTBot.yml'
     });
 
     if ('content' in content && typeof content.content === 'string') {
       const configContent = Buffer.from(content.content, 'base64').toString('utf-8');
-      return `IntelliBot Configuration:\n\n${configContent}`;
+      return `IBTBot Configuration:\n\n${configContent}`;
     } else {
-      return "IntelliBot configuration file not found.";
+      return "IBTBot configuration file not found.";
     }
   } catch (error) {
     console.error('Error debugging bot config:', error);
-    return "An error occurred while debugging the IntelliBot configuration.";
+    return "An error occurred while debugging the IBTBot configuration.";
   }
 }

@@ -224,12 +224,12 @@ npm run start`} />
             <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">3. Interacting with GitHub App</h3>
             <p className="mb-4 text-gray-600">Once the server is running, you can interact with the GitHub App by commenting on pull requests. Here are some example commands:</p>
             <ul className="list-disc list-inside mb-4 text-gray-600">
-              <li>@intellibotdemo generate interesting stats about this repository and render them as a table.</li>
-              <li>@intellibotdemo show all the console.log statements in this repository.</li>
-              <li>@intellibotdemo generate unit testing code for this file.</li>
-              <li>@intellibotdemo read src/utils.ts and generate unit testing code.</li>
-              <li>@intellibotdemo read the files in the src/scheduler package and generate a class diagram using mermaid and a README in the markdown format.</li>
-              <li>@intellibotdemo modularize this function.</li>
+              <li>@IBTBot generate interesting stats about this repository and render them as a table.</li>
+              <li>@IBTBot show all the console.log statements in this repository.</li>
+              <li>@IBTBot generate unit testing code for this file.</li>
+              <li>@IBTBot read src/utils.ts and generate unit testing code.</li>
+              <li>@IBTBot read the files in the src/scheduler package and generate a class diagram using mermaid and a README in the markdown format.</li>
+              <li>@IBTBot modularize this function.</li>
             </ul>
             <p className="mt-2 mb-4 text-gray-600">
               Note: Ensure that your GitHub App is properly configured and has the necessary permissions to interact with your repository.

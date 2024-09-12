@@ -23,7 +23,7 @@ Categories:
 2. Show console.log statements
 3. Generate unit tests
 4. Generate class diagram and README
-5. Debug IntelliBot configuration
+5. Debug IBTBot configuration
 6. Other (general query)
 
 Examples:
@@ -40,8 +40,8 @@ Classification: Generate unit tests
 User: Create a class diagram for the src folder and include a README
 Classification: Generate class diagram and README
 
-User: Help me debug the IntelliBot config file
-Classification: Debug IntelliBot configuration
+User: Help me debug the IBTBot config file
+Classification: Debug IBTBot configuration
 
 User: What's the best way to optimize this function?
 Classification: Other (general query)
@@ -204,10 +204,11 @@ export async function handlePullRequest(event: WebhookEvent, octokit: Octokit) {
 export async function handleIssueComment(event: WebhookEvent, octokit: Octokit) {
   if ('comment' in event && 'issue' in event) {
     const { comment, issue, repository } = event;
-    const commentBody = comment.body.toLowerCase();
-    const appName = '@intellibotdemo';
+    const commentBody = comment.body;
+    const appName = '@IBTBot';
 
     if (commentBody.startsWith(appName)) {
+      console.log('Handling issue comment with body: ', commentBody)
       const userQuery = commentBody.replace(appName, '').trim();
       try {
         // Classify the user query using the LLM
@@ -246,13 +247,23 @@ export async function handleIssueComment(event: WebhookEvent, octokit: Octokit) 
                 response = "An error occurred while generating unit tests for the pull request files.";
               }
             } else {
-              response = "This issue is not associated with a pull request. Unit tests can only be generated for pull request files.";
+              response = "This issue is not associated with a pull request. Unit tests can only be generated for pull request files for now.";
             }
             break;
 
           case 'Generate class diagram and README':
-            const packagePathPrompt = `Extract the package path from the following query: "${userQuery}"
-Package path:`;
+            const packagePathPrompt = `Extract the package path from the following user query: "${userQuery}", and output the path only, e.g. src/app, README.md.
+            <example>
+            user query: Generate a class diagram for the src folder
+            output: src
+
+            user query: read the files in the README and generate a class diagram using mermaid and a README in the markdown format
+            output: README.md
+
+            user query: read the files in the src/app package and generate a class diagram using mermaid and a README in the markdown format
+            output: src/app
+            </example>
+            `;
             const packagePath = await invokeModel(bedrockClient, modelId, packagePathPrompt);
             if (packagePath.trim()) {
               const classDiagram = await generateClassDiagram(repository.full_name, packagePath.trim());
@@ -262,9 +273,9 @@ Package path:`;
             }
             break;
 
-          case 'Debug IntelliBot configuration':
+          case 'Debug IBTBot configuration':
             const debugInfo = await debugBotConfig(repository.full_name);
-            response = `Here's some debug information for the IntelliBot configuration:\n\n${debugInfo}`;
+            response = `Here's some debug information for the IBTBot configuration:\n\n${debugInfo}`;
             break;
 
           default:

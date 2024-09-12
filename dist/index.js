@@ -82,8 +82,8 @@ Maintain a professional and informative tone. Be clear and concise in your descr
 </tone context>
 
 <code_change>
-This pull request includes the following changes:
-[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]
+This pull request includes the following changes, in format of file name: file status:
+[Insert the code change to be referenced in the PR description]
 </code_change>
 
 <detailed_task_description>
@@ -109,31 +109,21 @@ Provide your PR description in the following format:
 - [ ] This change requires a documentation update
 </output_format>
 `;
-const fixed_pr_generation_template = `
-# How Has This Been Tested?
-
-Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce. Please also list any relevant details for your test configuration
-
-- [ ] Test A
-- [ ] Test B
-
-**Test Configuration**:
-* Firmware version:
-* Hardware:
-* Toolchain:
-* SDK:
-
-# Checklist:
-
-- [ ] My code follows the style guidelines of this project
-- [ ] I have performed a self-review of my code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
-- [ ] Any dependent changes have been merged and published in downstream modules
-`;
+let statsSummary = [];
+function calculateFilePatchNumLines(fileChange) {
+    const lines = fileChange.split('\n');
+    let added = 0;
+    let removed = 0;
+    lines.forEach(line => {
+        if (line.startsWith('+')) {
+            added++;
+        }
+        else if (line.startsWith('-')) {
+            removed++;
+        }
+    });
+    return { added, removed };
+}
 async function generatePRDescription(client, modelId, octokit) {
     const pullRequest = github_1.context.payload.pull_request;
     const repo = github_1.context.repo;
@@ -142,17 +132,15 @@ async function generatePRDescription(client, modelId, octokit) {
         ...repo,
         pull_number: pullRequest.number,
     });
-    const fileChanges = await Promise.all(files.map(async (file) => {
-        // For removed files, we don't need to fetch the content
-        if (file.status === 'removed') {
-            return `${file.filename}: ${file.status}`;
-        }
+    const fileNameAndStatus = await Promise.all(files.map(async (file) => {
         try {
             const { data: content } = await octokit.rest.repos.getContent({
                 ...repo,
                 path: file.filename,
                 ref: pullRequest.head.sha,
             });
+            const { added, removed } = calculateFilePatchNumLines(file.patch);
+            statsSummary.push({ file: file.filename, added: added, removed: removed });
             return `${file.filename}: ${file.status}`;
         }
         catch (error) {
@@ -163,16 +151,26 @@ async function generatePRDescription(client, modelId, octokit) {
             return `${file.filename}: error`;
         }
     }));
-    const prDescriptionTemplate = pr_generation_prompt.replace('[Insert the code change to be referenced in the PR description, including file names and line numbers if applicable]', fileChanges.join('\n'));
+    const prDescriptionTemplate = pr_generation_prompt.replace('[Insert the code change to be referenced in the PR description]', fileNameAndStatus.join('\n'));
     // invoke model to generate complete PR description
     const payloadInput = prDescriptionTemplate;
     const prDescription = await invokeModel(client, modelId, payloadInput);
+    const fixedDescription = `
+  The file changes summary is as follows:
+  File number involved in this PR: {{FILE_NUMBER}}
+  File changes summary:
+  {{FILE_CHANGE_SUMMARY}}
+  `;
+    const fileChangeSummary = statsSummary.map(file => `${file.file}: ${file.added} added, ${file.removed} removed`).join('\n');
+    const fileNumber = statsSummary.length.toString();
+    fixedDescription.replace('{{FILE_CHANGE_SUMMARY}}', fileChangeSummary);
+    fixedDescription.replace('{{FILE_NUMBER}}', fileNumber);
     // append fixed template content to the generated PR description
-    const prDescriptionWithTemplate = prDescription + fixed_pr_generation_template;
+    const prDescriptionWithStats = prDescription + fixedDescription;
     await octokit.rest.pulls.update({
         ...repo,
         pull_number: pullRequest.number,
-        body: prDescriptionWithTemplate,
+        body: prDescriptionWithStats,
     });
     console.log('PR description updated successfully.');
 }
@@ -495,8 +493,7 @@ async function generateCodeReviewComment(bedrockClient, modelId, octokit, exclud
         // +This is the new line 1.
         //  This is an unchanged line.
         // @@ is the hunk header that shows where the changes are and how many lines are changed. In this case, it indicates that the changes start at line 1 of the old file and affect 3 lines, and start at line 1 of the new file and affect 2 lines.
-        // print the file patch content to console
-        console.log(`File patch content: ${file.patch} for file: ${file.filename}`);
+        // console.log(`File patch content: ${file.patch} for file: ${file.filename}`);
         if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
             // Split the patch into hunks
             const hunks = file.patch.split(/^@@\s+-\d+,\d+\s+\+\d+,\d+\s+@@/m);
@@ -508,7 +505,7 @@ async function generateCodeReviewComment(bedrockClient, modelId, octokit, exclud
                 const changedLines = hunkLines
                     .filter(line => line.startsWith('+') && !line.startsWith('+++'))
                     .map(line => line.substring(1));
-                console.log(`debugging: Hunk ${hunkIndex} content: ${hunk} with changed lines: ${changedLines}`);
+                // console.log(`debugging: Hunk ${hunkIndex} content: ${hunk} with changed lines: ${changedLines}`);
                 if (changedLines.length === 0)
                     continue;
                 const fileContent = changedLines.join('\n');
@@ -524,7 +521,7 @@ async function generateCodeReviewComment(bedrockClient, modelId, octokit, exclud
                 // invoke model to generate review comments
                 var review = await invokeModel(bedrockClient, modelId, formattedContent);
                 // log the generated review comments and check if it is empty
-                console.log(`Review comments ${review} generated for file: ${file.filename} in hunk ${hunkIndex} with file content: ${fileContent}`);
+                // console.log(`Review comments ${review} generated for file: ${file.filename} in hunk ${hunkIndex} with file content: ${fileContent}`);
                 if (!review || review.trim() == '') {
                     console.warn(`No review comments generated for hunk ${hunkIndex} in file ${file.filename}, skipping`);
                     continue;

@@ -13,7 +13,7 @@ console.log("GitHub App Token is set:", !!process.env.GITHUB_APP_TOKEN);
 app.post('/webhook', async (req, res) => {
   const event = req.body as WebhookEvent;
   const githubEvent = req.headers["x-github-event"] as string;
-  console.log('githubEvent', githubEvent)
+  console.log('githubEvent received: ', githubEvent)
   try {
     switch (githubEvent) {
       case "pull_request_review_comment":
