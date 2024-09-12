@@ -143,6 +143,7 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
     try {
       if (file.status === 'removed') {
         const { added, removed } = calculateFilePatchNumLines(file.patch as string);
+        console.log(`debugging: file ${file.filename} has ${added} added, ${removed} removed`);
         statsSummary.push({file: file.filename, added: 0, removed: removed});
         return `${file.filename}: removed`;
       } else {
@@ -152,6 +153,7 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
           ref: pullRequest.head.sha,
         });
         const { added, removed } = calculateFilePatchNumLines(file.patch as string);
+        console.log(`debugging: file ${file.filename} has ${added} added, ${removed} removed`);
         statsSummary.push({file: file.filename, added: added, removed: removed});
         return `${file.filename}: ${file.status}`;
       }
@@ -172,6 +174,8 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
 
   const fixedDescription =
   `
+ 
+  ## File Status Summary
   The file changes summary is as follows:
   File number involved in this PR: {{FILE_NUMBER}}
   File changes summary:
@@ -179,6 +183,8 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
   `
   const fileChangeSummary = statsSummary.map(file => `${file.file}: ${file.added} added, ${file.removed} removed`).join('\n');
   const fileNumber = statsSummary.length.toString();
+  console.log(`File number involved in this PR: ${fileNumber}`);
+  console.log(`File changes summary: ${fileChangeSummary}`);
   fixedDescription.replace('{{FILE_CHANGE_SUMMARY}}', fileChangeSummary);
   fixedDescription.replace('{{FILE_NUMBER}}', fileNumber);
 
