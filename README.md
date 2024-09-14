@@ -40,7 +40,7 @@ To use GitHub's OIDC provider, you must first set up federation with the provide
 
 Note that the thumbprint below has been set to all F's because the thumbprint is not used when authenticating token.actions.githubusercontent.com. This is a special case used only when GitHub's OIDC is authenticating to IAM. IAM uses its library of trusted CAs to authenticate. The value is still the API, so it must be specified.
 
-You can copy the template below, or load it from [Here](https://d38mtn6aq9zhn6.cloudfront.net/configure-aws-credentials-latest.yml).
+Simplely copy the template below, it will create a role with trust relationship to GitHub OIDC provider, and add the permissions to invoke the Bedrock API.
 ```yaml
 Parameters:
   GitHubOrg:
@@ -81,6 +81,8 @@ Resources:
                 token.actions.githubusercontent.com:aud: !Ref OIDCAudience
               StringLike:
                 token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${RepositoryName}:*
+      ManagedPolicyArns:
+        - !Ref BedrockPolicy
 
   GithubOidc:
     Type: AWS::IAM::OIDCProvider
@@ -92,9 +94,22 @@ Resources:
       ThumbprintList:
         - ffffffffffffffffffffffffffffffffffffffff
 
+  BedrockPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+              - bedrock:ListFoundationModels
+              - bedrock:GetFoundationModel
+            Resource: "*"
+
 Outputs:
   Role:
-    Value: !GetAtt Role.Arn 
+    Value: !GetAtt Role.Arn
 ```
 
 You will see the role been create with trust relationship similar to the following, that string "repo:github-organization/github-repository" will limit the workflow action only been trigger by the specified respotories.

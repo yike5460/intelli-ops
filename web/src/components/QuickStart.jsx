@@ -40,7 +40,7 @@ const QuickStart = () => {
           <div className="bg-gray-50 rounded-lg shadow-md p-6">
             <h3 className="text-2xl font-semibold mb-4 text-gray-800">1. Configuring IAM to trust GitHub</h3>
             <p className="mb-4 text-gray-600">
-              To use GitHub's OIDC provider, you must first set up federation with the provider as an IAM IdP. Here's a CloudFormation template that will configure this trust for you, you can just copy or load it from <a href="https://d38mtn6aq9zhn6.cloudfront.net/configure-aws-credentials-latest.yml" className="underline">HERE</a>:
+              To use GitHub's OIDC provider, you must first set up federation with the provider as an IAM IdP. Here's a CloudFormation template that will create a role with trust relationship to GitHub OIDC provider, and add the permissions to invoke the Bedrock API:
             </p>
             <FoldableCommand title="CloudFormation Template" command={`Parameters:
   GitHubOrg:
@@ -81,6 +81,8 @@ Resources:
                 token.actions.githubusercontent.com:aud: !Ref OIDCAudience
               StringLike:
                 token.actions.githubusercontent.com:sub: !Sub repo:\${GitHubOrg}/\${RepositoryName}:*
+      ManagedPolicyArns:
+        - !Ref BedrockPolicy
 
   GithubOidc:
     Type: AWS::IAM::OIDCProvider
@@ -92,26 +94,22 @@ Resources:
       ThumbprintList:
         - ffffffffffffffffffffffffffffffffffffffff
 
+  BedrockPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+              - bedrock:ListFoundationModels
+              - bedrock:GetFoundationModel
+            Resource: "*"
+
 Outputs:
   Role:
     Value: !GetAtt Role.Arn`} />
-            <p className="mt-2 mb-4 text-gray-600">
-              Add the least privilege permission to invoke the Amazon Bedrock API to the role:
-            </p>
-            <FoldableCommand title="Amazon Bedrock Policy" command={`{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "bedrock:InvokeModel",
-                "bedrock:ListFoundationModels",
-                "bedrock:GetFoundationModel"
-            ],
-            "Resource": "*"
-        }
-    ]
-}`} />
             <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">2. Setting up the GitHub Actions</h3>
             <p className="mb-4 text-gray-600">
               Here's a complete workflow sample that includes configuring AWS credentials and using the Intelli-Ops GitHub Action. 
@@ -173,12 +171,13 @@ jobs:
       with:
         github-token: \${{ secrets.GITHUB_TOKEN }}
         aws-region: us-east-1
-        model-id: anthropic.claude-3-5-sonnet-20240620-v1:0
+        model-id: anthropic.claude-3-sonnet-20240229-v1:0
         generate-code-review: 'true'
         generate-code-review-level: 'detailed'
-        generate-code-review-exclude-files: '*.md,*.json,*.yml,*.yaml'
+        generate-code-review-exclude-files: '*.md,*.json'
         generate-pr-description: 'true'
         generate-unit-test: 'true'
+        generate-code-review-source-folder: 'src'
         output-language: 'en'
       env:
         GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}`} />
