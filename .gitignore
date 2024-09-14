@@ -16,4 +16,5 @@ node_modules
 build
 .vercel
 .aider*
+/tmp
 tmp.rm.later

@@ -8,7 +8,7 @@ export async function generateFakeResponse(): Promise<TestCase[]> {
     // Return a predefined fake response structure
     return [
         {
-            name: 'Default Unit Test',
+            name: 'Default Unit Test due to the model time out during the test generation, most likely due to the prompt being too long',
             type: 'direct',
             code: "test('default test', () => { expect(true).toBe(true); });",
         },

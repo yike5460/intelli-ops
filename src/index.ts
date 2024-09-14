@@ -142,7 +142,6 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
     try {
       if (file.status === 'removed') {
         const { added, removed } = calculateFilePatchNumLines(file.patch as string);
-        console.log(`debugging: file ${file.filename} has ${added} added, ${removed} removed`);
         statsSummary.push({file: file.filename, added: 0, removed: removed});
         return `${file.filename}: removed`;
       } else {
@@ -152,7 +151,6 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
           ref: pullRequest.head.sha,
         });
         const { added, removed } = calculateFilePatchNumLines(file.patch as string);
-        console.log(`debugging: file ${file.filename} has ${added} added, ${removed} removed`);
         statsSummary.push({file: file.filename, added: added, removed: removed});
         return `${file.filename}: ${file.status}`;
       }
@@ -241,12 +239,12 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
   const branchName = pullRequest.head.ref;
   let allTestCases: any[] = [];
 
-  // Check if the "auto unit test baseline" tag exists
+  // Check if the "auto-unit-test-baseline" tag exists
   const { data: tags } = await octokit.rest.repos.listTags({
     ...repo,
     per_page: 100,
   });
-  const baselineTagExists = tags.some(tag => tag.name === 'auto unit test baseline');
+  const baselineTagExists = tags.some(tag => tag.name === 'auto-unit-test-baseline');
 
   if (!baselineTagExists) {
     // Generate tests for all .ts files in the specified folder
@@ -271,10 +269,10 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
       }
     }
 
-    // Create the baseline tag
+    // Create the baseline tag (changed from "auto unit test baseline" to "auto-unit-test-baseline")
     await octokit.rest.git.createRef({
       ...repo,
-      ref: 'refs/tags/auto unit test baseline',
+      ref: 'refs/tags/auto-unit-test-baseline',
       sha: pullRequest.head.sha,
     });
   } else {
@@ -563,7 +561,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
         const changedLines = hunkLines
           .filter(line => line.startsWith('+') && !line.startsWith('+++'))
           .map(line => line.substring(1));
-        // console.log(`debugging: Hunk ${hunkIndex} content: ${hunk} with changed lines: ${changedLines}`);
+        // console.log(`  Hunk ${hunkIndex} content: ${hunk} with changed lines: ${changedLines}`);
 
         if (changedLines.length === 0) continue;
 
