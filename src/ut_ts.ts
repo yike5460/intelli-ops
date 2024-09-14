@@ -50,7 +50,7 @@ export async function generateUnitTests(client: BedrockRuntimeClient, modelId: s
       const finalResult = responseBody.content[0].text;
       
       try {
-        const parsedTestCases = JSON.parse(finalResult) as TestCase[];
+        const parsedTestCases = JSON.parse(finalResult.replace(/\n/g, '\\n')) as TestCase[];
         if (!Array.isArray(parsedTestCases)) {
             throw new Error('Parsed result is not an array');
         }
@@ -60,12 +60,34 @@ export async function generateUnitTests(client: BedrockRuntimeClient, modelId: s
       } catch (error) {
           console.error('Failed to parse or validate AI response:', error);
           console.log('Raw AI response:', finalResult);
+          // Attempt to extract test cases manually in consideration of the inconsistent format of the AI response
+          const extractedTestCases = extractTestCases(finalResult);
+          if (extractedTestCases.length > 0) {
+              console.log('Extracted test cases manually:', extractedTestCases);
+              return extractedTestCases;
+          }
           return [];
       }
     } catch (error) {
       console.error('Error occurred while generating unit tests:', error);
       return [];
     }
+}
+
+function extractTestCases(rawResponse: string): TestCase[] {
+    const testCases: TestCase[] = [];
+    const regex = /\{\s*"name":\s*"([^"]+)",\s*"type":\s*"([^"]+)",\s*"code":\s*"([^"]*)"\s*\}/g;
+    let match;
+    while ((match = regex.exec(rawResponse)) !== null) {
+        if (match[1] && match[2] && match[3]) {
+            testCases.push({
+                name: match[1],
+                type: match[2] as 'direct' | 'indirect' | 'not-testable',
+                code: match[3].replace(/\\n/g, '\n').replace(/\\"/g, '"')
+            });
+        }
+    }
+    return testCases;
 }
 
 export async function runUnitTests(testCases: TestCase[], sourceCode: string): Promise<void> {

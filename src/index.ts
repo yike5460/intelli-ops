@@ -3,6 +3,7 @@ import { getOctokit, context } from '@actions/github';
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import * as fs from 'fs';
 import * as path from 'path';
+import { setTimeout } from 'timers/promises';
 
 // current we support typescript and python, while the python library is not available yet, we will use typescript as the default language
 // using abosolute path to import the functions from ut_ts.ts
@@ -270,11 +271,17 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
     }
 
     // Create the baseline tag (changed from "auto unit test baseline" to "auto-unit-test-baseline")
-    await octokit.rest.git.createRef({
-      ...repo,
-      ref: 'refs/tags/auto-unit-test-baseline',
-      sha: pullRequest.head.sha,
-    });
+    try {
+      await octokit.rest.git.createRef({
+        ...repo,
+        ref: 'refs/tags/auto-unit-test-baseline',
+        sha: pullRequest.head.sha,
+      });
+      console.log('Tag created successfully');
+      await setTimeout(5000); // Wait for 5 seconds
+    } catch (error) {
+      console.error('Failed to create tag:', error);
+    }
   } else {
     // Generate tests only for files changed in the PR
     const { data: changedFiles } = await octokit.rest.pulls.listFiles({
@@ -283,7 +290,7 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
     });
 
     for (const file of changedFiles) {
-      if (file.filename.endsWith('.ts') && !file.filename.includes('test') && !file.filename.endsWith('.d.ts')) {
+      if (file.filename.startsWith(unitTestSourceFolder)) {
         const { data: content } = await octokit.rest.repos.getContent({
           ...repo,
           path: file.filename,
