@@ -1,9 +1,5 @@
 import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
-export interface TestCase {
-    name: string;
-    type: 'direct' | 'indirect' | 'not-testable';
-    code: string;
-}
+import { TestCase } from './testUtils';
 export declare function generateUnitTests(client: BedrockRuntimeClient, modelId: string, sourceCode: string): Promise<TestCase[]>;
-export declare function runUnitTests(testCases: TestCase[]): Promise<void>;
+export declare function runUnitTests(testCases: TestCase[], sourceCode: string): Promise<void>;
 export declare function generateTestReport(testCases: TestCase[]): Promise<void>;

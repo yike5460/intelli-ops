@@ -1,6 +1,8 @@
 import * as core from '@actions/core';
 import { getOctokit, context } from '@actions/github';
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
+import * as fs from 'fs';
+import * as path from 'path';
 
 // current we support typescript and python, while the python library is not available yet, we will use typescript as the default language
 // using abosolute path to import the functions from ut_ts.ts
@@ -229,15 +231,15 @@ async function extractFunctions(content: string): Promise<string[]> {
   // Dummy response for debugging purposes
   return [
     'export async function generateUnitTests(client: BedrockRuntimeClient, modelId: string, sourceCode: string): Promise<TestCase[]> { ... }',
-    'async function runUnitTests(testCases: TestCase[]): Promise<void> { ... }',
+    'async function runUnitTests(testCases: TestCase[], sourceCode: string): Promise<void> { ... }',
     'function generateTestReport(testCases: TestCase[]): Promise<void> { ... }',
   ];
 }
 
-export async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }): Promise<void> {
+export async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }, unitTestSourceFolder: string): Promise<void> {
   const pullRequest = context.payload.pull_request as PullRequest;
   const branchName = pullRequest.head.ref;
-  let allTestCases: any[] = []; // Store all generated test cases
+  let allTestCases: any[] = [];
 
   // Check if the "auto unit test baseline" tag exists
   const { data: tags } = await octokit.rest.repos.listTags({
@@ -247,15 +249,15 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
   const baselineTagExists = tags.some(tag => tag.name === 'auto unit test baseline');
 
   if (!baselineTagExists) {
-    // Generate tests for all .ts files in the codebase
+    // Generate tests for all .ts files in the specified folder
     const { data: files } = await octokit.rest.repos.getContent({
       ...repo,
-      path: '',
+      path: unitTestSourceFolder,
     });
 
     if (Array.isArray(files)) {
       for (const file of files) {
-        if (file.type === 'file' && file.name.endsWith('.ts') && !file.name.includes('test') && !file.name.endsWith('.d.ts')) {
+        if (file.type === 'file') {
           const { data: content } = await octokit.rest.repos.getContent({
             ...repo,
             path: file.path,
@@ -303,7 +305,10 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
     return;
   }
 
-  await runUnitTests(allTestCases);
+  const sourceFilePath = path.join(__dirname, '..', 'src', 'index.ts'); // Adjust this path if needed
+  const sourceCode = fs.readFileSync(sourceFilePath, 'utf-8');
+
+  await runUnitTests(allTestCases, sourceCode);
   await generateTestReport(allTestCases);
   console.log('Unit tests and report generated successfully.');
 
@@ -648,6 +653,7 @@ async function run(): Promise<void> {
     const generatePrDescription = core.getInput('generate-pr-description');
     const generateUnitTest = core.getInput('generate-unit-test');
     const outputLanguage = core.getInput('output-language');
+    const unitTestSourceFolder = core.getInput('generate-code-review-source-folder');
 
     const excludePatterns = excludeFiles ? excludeFiles.split(',').map(p => p.trim()) : [];
 
@@ -660,6 +666,7 @@ async function run(): Promise<void> {
     console.log(`Review level: ${reviewLevel}`);
     console.log(`Generate PR description: ${generatePrDescription.toLowerCase() === 'true' ? 'true' : 'false'}`);
     console.log(`Generate unit test suite: ${generateUnitTest.toLowerCase() === 'true' ? 'true' : 'false'}`);
+    console.log(`Test folder path: ${unitTestSourceFolder}`);
     if (!githubToken) {
       throw new Error('GitHub token is not set');
     }
@@ -684,7 +691,10 @@ async function run(): Promise<void> {
 
     // branch to generate unit tests suite
     if (generateUnitTest.toLowerCase() === 'true') {
-      await generateUnitTestsSuite(bedrockClient, modelId, octokit, repo);
+      if (!unitTestSourceFolder) {
+        throw new Error('Test folder path is not specified');
+      }
+      await generateUnitTestsSuite(bedrockClient, modelId, octokit, repo, unitTestSourceFolder);
     }
 
     // branch to generate code review comments

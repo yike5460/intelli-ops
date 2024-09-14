@@ -4,6 +4,6 @@ export declare function generatePRDescription(client: BedrockRuntimeClient, mode
 export declare function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: {
     owner: string;
     repo: string;
-}): Promise<void>;
+}, unitTestSourceFolder: string): Promise<void>;
 export declare function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string): Promise<string>;
 export declare function generateCodeReviewComment(bedrockClient: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, excludePatterns: string[], reviewLevel: string, outputLanguage: string): Promise<void>;
