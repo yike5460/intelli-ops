@@ -249,25 +249,30 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
 
   if (!baselineTagExists) {
     // Generate tests for all .ts files in the specified folder
-    const { data: files } = await octokit.rest.repos.getContent({
-      ...repo,
-      path: unitTestSourceFolder,
-    });
+    try {
+      const { data: files } = await octokit.rest.repos.getContent({
+        ...repo,
+        path: unitTestSourceFolder,
+      });
 
-    if (Array.isArray(files)) {
-      for (const file of files) {
-        if (file.type === 'file') {
-          const { data: content } = await octokit.rest.repos.getContent({
-            ...repo,
-            path: file.path,
-          });
-          if ('content' in content && typeof content.content === 'string') {
-            const decodedContent = Buffer.from(content.content, 'base64').toString('utf8');
-            const testCases = await generateUnitTests(client, modelId, decodedContent);
-            allTestCases = allTestCases.concat(testCases);
+      if (Array.isArray(files)) {
+        for (const file of files) {
+          if (file.type === 'file') {
+            const { data: content } = await octokit.rest.repos.getContent({
+              ...repo,
+              path: file.path,
+            });
+            if ('content' in content && typeof content.content === 'string') {
+              const decodedContent = Buffer.from(content.content, 'base64').toString('utf8');
+              const testCases = await generateUnitTests(client, modelId, decodedContent);
+              allTestCases = allTestCases.concat(testCases);
+            }
           }
         }
       }
+    } catch (error) {
+      console.error('Failed to list files in the specified folder, make sure the folder is correct, error: ', error);
+      return;
     }
 
     // Create the baseline tag (changed from "auto unit test baseline" to "auto-unit-test-baseline")
@@ -340,8 +345,8 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
           fileSha = existingFile.sha;
         }
       } catch (error) {
-        // it's fine if the file does not exist
-        console.log(`File ${unitTestsFileName} does not exist in the repository`);
+        // File doesn't exist, which is fine for the first time
+        console.log(`File ${unitTestsFileName} does not exist in the repository. Creating it.`);
       }
 
       await octokit.rest.repos.createOrUpdateFileContents({
@@ -352,6 +357,8 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
         branch: branchName,
         sha: fileSha, // Include the sha if the file exists, undefined otherwise
       });
+
+      console.log(`Unit tests file ${unitTestsFileName} created or updated successfully.`);
 
     } catch (error) {
       console.error('Error occurred while pushing the changes to the PR branch', error);
