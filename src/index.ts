@@ -4,6 +4,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 import * as fs from 'fs';
 import * as path from 'path';
 import { setTimeout } from 'timers/promises';
+import { exponentialBackoff } from '@/src/utils'; // Assume this utility function exists
 
 // current we support typescript and python, while the python library is not available yet, we will use typescript as the default language
 // using abosolute path to import the functions from ut_ts.ts
@@ -473,67 +474,75 @@ List potential improvements, mandatory to include if the summary is "Approve wit
 `;
 
 export async function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string): Promise<string> {
-  try {
-    // seperate branch to invoke RESTFul endpoint exposed by API Gateway, if the modelId is prefixed with string like "sagemaker.<api id>.execute-api.<region>.amazonaws.com/prod"
-    if (modelId.startsWith("sagemaker.")) {
-      // invoke RESTFul endpoint e.g. curl -X POST -H "Content-Type: application/json" -d '{"prompt": "import argparse\ndef main(string: str):\n    print(string)\n    print(string[::-1])\n    if __name__ == \"__main__\":", "parameters": {"max_new_tokens": 256, "temperature": 0.1}}' https://<api id>.execute-api.<region>.amazonaws.com/prod
-      const endpoint = modelId.split("sagemaker.")[1];
+  const maxRetries = 3;
+  const initialDelay = 1000; // 1 second
 
-      // invoke the RESTFul endpoint with the payload
+  const invokeWithRetry = async (): Promise<string> => {
+    try {
+      // seperate branch to invoke RESTFul endpoint exposed by API Gateway, if the modelId is prefixed with string like "sagemaker.<api id>.execute-api.<region>.amazonaws.com/prod"
+      if (modelId.startsWith("sagemaker.")) {
+        // invoke RESTFul endpoint e.g. curl -X POST -H "Content-Type: application/json" -d '{"prompt": "import argparse\ndef main(string: str):\n    print(string)\n    print(string[::-1])\n    if __name__ == \"__main__\":", "parameters": {"max_new_tokens": 256, "temperature": 0.1}}' https://<api id>.execute-api.<region>.amazonaws.com/prod
+        const endpoint = modelId.split("sagemaker.")[1];
+
+        // invoke the RESTFul endpoint with the payload
+        const payload = {
+          prompt: payloadInput,
+          parameters: {
+            max_new_tokens: 256,
+            temperature: 0.1,
+          },
+        };
+
+        const response = await fetch(`https://${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const responseBody = await response.json();
+        // extract the generated text from the response, the output payload should be in the format { "generated_text": "..." } using codellama model for now
+        const finalResult = (responseBody as { generated_text: string }).generated_text;
+
+        return finalResult;
+      }
+
       const payload = {
-        prompt: payloadInput,
-        parameters: {
-          max_new_tokens: 256,
-          temperature: 0.1,
-        },
+        anthropic_version: "bedrock-2023-05-31",
+        max_tokens: 4096,
+        messages: [
+          {
+            role: "user",
+            content: [{
+              type: "text",
+              text: payloadInput,
+            }],
+          },
+        ],
       };
 
-      const response = await fetch(`https://${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const command = new InvokeModelCommand({
+        // modelId: "anthropic.claude-3-5-sonnet-20240620-v1:0"
+        modelId: modelId,
+        contentType: "application/json",
         body: JSON.stringify(payload),
       });
 
-      const responseBody = await response.json();
-      // extract the generated text from the response, the output payload should be in the format { "generated_text": "..." } using codellama model for now
-      const finalResult = (responseBody as { generated_text: string }).generated_text;
-
-      return finalResult;
+      const apiResponse = await client.send(command);
+      const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
+      const responseBody = JSON.parse(decodedResponseBody);
+      return responseBody.content[0].text;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'ThrottlingException') {
+        throw error; // Allow retry for throttling errors
+      }
+      console.error('Error occurred while invoking the model', error);
+      throw error; // Throw other errors without retry
     }
+  };
 
-    const payload = {
-      anthropic_version: "bedrock-2023-05-31",
-      max_tokens: 4096,
-      messages: [
-        {
-          role: "user",
-          content: [{
-            type: "text",
-            text: payloadInput,
-          }],
-        },
-      ],
-    };
-
-    const command = new InvokeModelCommand({
-      // modelId: "anthropic.claude-3-5-sonnet-20240620-v1:0"
-      modelId: modelId,
-      contentType: "application/json",
-      body: JSON.stringify(payload),
-    });
-
-    const apiResponse = await client.send(command);
-    const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
-    const responseBody = JSON.parse(decodedResponseBody);
-    const finalResult = responseBody.content[0].text;
-
-    return finalResult;
-  } catch (error) {
-    console.error('Error occurred while invoking the model', error);
-    throw error;
-  }
+  return exponentialBackoff(invokeWithRetry, maxRetries, initialDelay);
 }
 
 export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, excludePatterns: string[], reviewLevel: string, outputLanguage: string): Promise<void> {
