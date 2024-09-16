@@ -5,5 +5,4 @@ export declare function generateUnitTestsSuite(client: BedrockRuntimeClient, mod
     owner: string;
     repo: string;
 }, unitTestSourceFolder: string): Promise<void>;
-export declare function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string): Promise<string>;
 export declare function generateCodeReviewComment(bedrockClient: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, excludePatterns: string[], reviewLevel: string, outputLanguage: string): Promise<void>;
