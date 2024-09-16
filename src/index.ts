@@ -316,10 +316,7 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
     return;
   }
 
-  const sourceFilePath = path.join(process.cwd(), unitTestSourceFolder);
-  const sourceCode = fs.readFileSync(sourceFilePath, 'utf-8');
-
-  await runUnitTests(allTestCases, sourceCode);
+  await runUnitTests(allTestCases, unitTestSourceFolder);
   await generateTestReport(allTestCases);
   console.log('Unit tests and report generated successfully.');
 

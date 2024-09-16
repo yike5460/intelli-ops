@@ -90,7 +90,30 @@ function extractTestCases(rawResponse: string): TestCase[] {
     return testCases;
 }
 
-export async function runUnitTests(testCases: TestCase[], sourceCode: string): Promise<void> {
+export async function runUnitTests(testCases: TestCase[], unitTestSourceFolder: string): Promise<void> {
+
+    const sourceFilePath = path.join(process.cwd(), unitTestSourceFolder);
+    let sourceCode = '';
+
+    try {
+        const files = fs.readdirSync(sourceFilePath);
+        for (const file of files) {
+        if (file.endsWith('.ts') || file.endsWith('.js')) {
+            const filePath = path.join(sourceFilePath, file);
+            const fileContent = fs.readFileSync(filePath, 'utf-8');
+            sourceCode += fileContent + '\n\n';
+        }
+        }
+    } catch (error) {
+        console.error(`Error reading source files: ${error}`);
+        return;
+    }
+
+    if (sourceCode === '') {
+        console.warn('No source code files found in the specified directory. Skipping unit tests execution and report generation.');
+        return;
+    }
+
     if (!Array.isArray(testCases) || testCases.length === 0) {
         console.log('Input test cases', testCases);
         console.log('No test cases to run');
