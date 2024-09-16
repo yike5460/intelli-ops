@@ -316,7 +316,7 @@ export async function generateUnitTestsSuite(client: BedrockRuntimeClient, model
     return;
   }
 
-  const sourceFilePath = path.join(__dirname, '..', 'src', 'index.ts'); // Adjust this path if needed
+  const sourceFilePath = path.join(process.cwd(), unitTestSourceFolder);
   const sourceCode = fs.readFileSync(sourceFilePath, 'utf-8');
 
   await runUnitTests(allTestCases, sourceCode);
@@ -674,7 +674,7 @@ async function run(): Promise<void> {
     const generatePrDescription = core.getInput('generate-pr-description');
     const generateUnitTest = core.getInput('generate-unit-test');
     const outputLanguage = core.getInput('output-language');
-    const unitTestSourceFolder = core.getInput('generate-code-review-source-folder');
+    const unitTestSourceFolder = core.getInput('generate-unit-test-source-folder');
 
     const excludePatterns = excludeFiles ? excludeFiles.split(',').map(p => p.trim()) : [];
 

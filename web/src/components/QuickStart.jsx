@@ -177,7 +177,7 @@ jobs:
         generate-code-review-exclude-files: '*.md,*.json'
         generate-pr-description: 'true'
         generate-unit-test: 'true'
-        generate-code-review-source-folder: 'src'
+        generate-unit-test-source-folder: 'src'
         output-language: 'en'
       env:
         GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}`} />
