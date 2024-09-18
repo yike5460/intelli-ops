@@ -528,26 +528,13 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
           continue;
         }
 
-        // Calculate the position for this hunk
-        let hunkPosition = totalPosition + 1;
-        for (const line of hunkLines) {
-          if (line.startsWith('+') && !line.startsWith('+++')) {
-            // Check if the added line is a comment or actual code
-            if (!line.trim().startsWith('//') && !line.trim().startsWith('/*')) {
-              // console.log(`Review comments ${review} generated for file: ${file.filename} with position: ${hunkPosition}`);
-              reviewComments.push({
-                path: file.filename,
-                position: hunkPosition,
-                body: review,
-              });
-              break;
-            }
-          }
-          if (!line.startsWith('-')) {
-            hunkPosition++;
-          }
-        }
-
+        // add the generated review comments to the end of per hunk
+        const position = totalPosition + 1;
+        reviewComments.push({
+          path: file.filename,
+          position: position,
+          body: review,
+        });
         totalPosition += hunkLines.length;
       }
     } else {
