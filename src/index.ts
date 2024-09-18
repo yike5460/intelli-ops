@@ -406,7 +406,7 @@ Provide feedback on these aspects, categorizing your comments as follows:
 7. If relevant, mention any educational points that could help the developer learn, prefixed with "Learning opportunity:".
 </rules>
 
-If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, Suggestions, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 100 words, the output language should be {{LANGUAGE_NAME}}, and follow the output format below.
+If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, Suggestions, please answer only "Looks Good To Me" directly. Otherwise provide your review in the following format. Limit the total response within 100 words, the output language should be {{LANGUAGE_NAME}}, and follow the output format below.
 
 Summary:
 Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below
@@ -456,7 +456,7 @@ Provide feedback on these aspects, categorizing your comments as follows:
 5. If suggesting an alternative approach, briefly explain its benefits.
 </rules>
 
-If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, please answer only "No Review Needed" directly. Otherwise provide your review in the following format. Limit the total response within 50 words. The output language should be {{LANGUAGE_NAME}}, and follow the output format below.
+If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, please answer only "Looks Good To Me" directly. Otherwise provide your review in the following format. Limit the total response within 50 words. The output language should be {{LANGUAGE_NAME}}, and follow the output format below.
 
 Summary:
 Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below
@@ -500,14 +500,14 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
       // Split the patch into hunks
       const hunks = file.patch.split(/^@@\s+-\d+,\d+\s+\+\d+,\d+\s+@@/m);
       let totalPosition = 0;
-      console.log(`Debugging Hunks: ${hunks}`);
+      console.log(`======================= Debugging Hunks ========================\n ${hunks}\n ================================================`);
       for (const [hunkIndex, hunk] of hunks.entries()) {
         if (hunkIndex === 0) continue; // Skip the first element (it's empty due to the split)
         const hunkLines = hunk.split('\n').slice(1); // Remove the hunk header
 
         // Include all lines in the hunk, preserving '+' and '-' prefixes
         const diffContent = hunkLines.join('\n');
-        console.log(`Debugging Diff content: ${diffContent}`);
+        console.log(`======================= Debugging Diff content ========================\n ${diffContent}\n ================================================`);
         const promptTemplate = reviewLevel === 'detailed' ? detailed_review_prompt : concise_review_prompt;
         let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', diffContent);
 
