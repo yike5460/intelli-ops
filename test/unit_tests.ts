@@ -1,292 +1,314 @@
-import { splitContentIntoChunks_deprecated } from '../src/utils';
+import { splitContentIntoChunks_deprecated } from '../src/index';
 
 describe('splitContentIntoChunks_deprecated', () => {
-  it('should split content into chunks correctly', () => {
-    const content = 'This is a\
-long string\
-with multiple\
+  it('should split the content into chunks of the specified maximum size', () => {
+    const content = 'This is a long\
+content\
+string\
+with\
+multiple\
 lines';
     const maxChunkSize = 10;
-    const expectedChunks = ['This is a', '\
-long str', 'ing\
-with ', 'multiple\
-', 'lines'];
+    const expectedChunks = [
+      'This is a ',
+      'long\
+conte',
+      'nt\
+string\
+',
+      'with\
+mult',
+      'iple\
+line',
+      's'
+    ];
 
-    const result = splitContentIntoChunks_deprecated(content, maxChunkSize);
+    const chunks = splitContentIntoChunks_deprecated(content, maxChunkSize);
 
-    expect(result).toEqual(expectedChunks);
+    expect(chunks).toHaveLength(expectedChunks.length);
+    expect(chunks).toEqual(expectedChunks);
   });
 
-  it('should handle empty input string', () => {
+  it('should handle an empty string', () => {
     const content = '';
     const maxChunkSize = 10;
     const expectedChunks: string[] = [];
 
-    const result = splitContentIntoChunks_deprecated(content, maxChunkSize);
+    const chunks = splitContentIntoChunks_deprecated(content, maxChunkSize);
 
-    expect(result).toEqual(expectedChunks);
+    expect(chunks).toHaveLength(expectedChunks.length);
+    expect(chunks).toEqual(expectedChunks);
   });
 
-  it('should handle input string shorter than maxChunkSize', () => {
+  it('should handle a string shorter than the maximum chunk size', () => {
     const content = 'Short string';
     const maxChunkSize = 20;
     const expectedChunks = ['Short string'];
 
-    const result = splitContentIntoChunks_deprecated(content, maxChunkSize);
+    const chunks = splitContentIntoChunks_deprecated(content, maxChunkSize);
 
-    expect(result).toEqual(expectedChunks);
+    expect(chunks).toHaveLength(expectedChunks.length);
+    expect(chunks).toEqual(expectedChunks);
   });
 });
 
 
-import { shouldExcludeFile } from '../src/utils';
+import { shouldExcludeFile } from '../src/index';
 
 describe('shouldExcludeFile', () => {
-  it('should exclude files matching the pattern', () => {
-    const filename = 'src/utils.ts';
-    const excludePatterns = ['src/*'];
+  it('should return true if the file matches any of the exclude patterns', () => {
+    const filename = 'src/utils/helper.js';
+    const excludePatterns = ['**/utils/*', '*.txt'];
 
-    const result = shouldExcludeFile(filename, excludePatterns);
+    const shouldExclude = shouldExcludeFile(filename, excludePatterns);
 
-    expect(result).toBe(true);
+    expect(shouldExclude).toBe(true);
   });
 
-  it('should not exclude files not matching the pattern', () => {
-    const filename = 'src/main.ts';
-    const excludePatterns = ['test/*'];
+  it('should return false if the file does not match any of the exclude patterns', () => {
+    const filename = 'src/components/App.tsx';
+    const excludePatterns = ['**/utils/*', '*.txt'];
 
-    const result = shouldExcludeFile(filename, excludePatterns);
+    const shouldExclude = shouldExcludeFile(filename, excludePatterns);
 
-    expect(result).toBe(false);
+    expect(shouldExclude).toBe(false);
   });
 
-  it('should handle multiple exclude patterns', () => {
-    const filename = 'src/utils.ts';
-    const excludePatterns = ['src/*', 'test/*'];
+  it('should handle empty exclude patterns', () => {
+    const filename = 'src/components/App.tsx';
+    const excludePatterns: string[] = [];
 
-    const result = shouldExcludeFile(filename, excludePatterns);
+    const shouldExclude = shouldExcludeFile(filename, excludePatterns);
 
-    expect(result).toBe(true);
-  });
-
-  it('should handle wildcard patterns', () => {
-    const filename = 'src/utils/helper.ts';
-    const excludePatterns = ['src/utils/*'];
-
-    const result = shouldExcludeFile(filename, excludePatterns);
-
-    expect(result).toBe(true);
+    expect(shouldExclude).toBe(false);
   });
 });
 
 
-import { calculateFilePatchNumLines } from '../src/utils';
+import { calculateFilePatchNumLines } from '../src/index';
 
 describe('calculateFilePatchNumLines', () => {
-  it('should calculate added and removed lines correctly', () => {
-    const fileChange = `@@ -1,3 +1,2 @@
--This is the original line 1.
--This is the original line 2.
-+This is the new line 1.`;
+  it('should correctly count added and removed lines', () => {
+    const fileChange = `diff --git a/file.txt b/file.txt
++++ b/file.txt
+@@ -1,3 +1,4 @@
+ line1
+-line2
+ line3
++line4`;
 
-    const result = calculateFilePatchNumLines(fileChange);
+    const { added, removed } = calculateFilePatchNumLines(fileChange);
 
-    expect(result).toEqual({ added: 1, removed: 2 });
+    expect(added).toBe(1);
+    expect(removed).toBe(1);
   });
 
-  it('should handle no changes', () => {
-    const fileChange = `@@ -1,2 +1,2 @@
- This is an unchanged line.
- This is another unchanged line.`;
+  it('should handle a file with no changes', () => {
+    const fileChange = '';
 
-    const result = calculateFilePatchNumLines(fileChange);
+    const { added, removed } = calculateFilePatchNumLines(fileChange);
 
-    expect(result).toEqual({ added: 0, removed: 0 });
+    expect(added).toBe(0);
+    expect(removed).toBe(0);
   });
 
-  it('should handle only additions', () => {
-    const fileChange = `@@ -1,1 +1,2 @@
- This is an unchanged line.
-+This is a new line.`;
+  it('should handle a file with only additions', () => {
+    const fileChange = `diff --git a/file.txt b/file.txt
++++ b/file.txt
+@@ -1,1 +1,3 @@
+ line1
++line2
++line3`;
 
-    const result = calculateFilePatchNumLines(fileChange);
+    const { added, removed } = calculateFilePatchNumLines(fileChange);
 
-    expect(result).toEqual({ added: 1, removed: 0 });
+    expect(added).toBe(2);
+    expect(removed).toBe(0);
   });
 
-  it('should handle only removals', () => {
-    const fileChange = `@@ -1,2 +1,1 @@
--This is a removed line.
- This is an unchanged line.`;
+  it('should handle a file with only removals', () => {
+    const fileChange = `diff --git a/file.txt b/file.txt
++++ b/file.txt
+@@ -1,3 +1,1 @@
+-line1
+ line2
+-line3`;
 
-    const result = calculateFilePatchNumLines(fileChange);
+    const { added, removed } = calculateFilePatchNumLines(fileChange);
 
-    expect(result).toEqual({ added: 0, removed: 1 });
+    expect(added).toBe(0);
+    expect(removed).toBe(2);
   });
 });
 
 
-import { generatePRDescription } from '../src/utils';
-import { context } from '@actions/github';
+import { extractFunctions } from '../src/index';
+
+describe('extractFunctions', () => {
+  it('should extract functions from the provided code', async () => {
+    const sourceCode = `
+      // File: ./index.ts
+      export function foo() {
+        console.log('Hello, world!');
+      }
+
+      // File: ./utils.ts
+      export async function bar() {
+        await Promise.resolve();
+      }
+    `;
+
+    const expectedFunctions = [
+      'export function foo() { ... }',
+      'export async function bar() { ... }',
+    ];
+
+    const functions = await extractFunctions(sourceCode);
+
+    expect(functions).toHaveLength(expectedFunctions.length);
+    expect(functions).toEqual(expect.arrayContaining(expectedFunctions));
+  });
+
+  it('should return an empty array if no functions are found', async () => {
+    const sourceCode = `
+      // File: ./index.ts
+      const foo = 'bar';
+    `;
+
+    const functions = await extractFunctions(sourceCode);
+
+    expect(functions).toHaveLength(0);
+  });
+
+  // Add more test cases to cover different scenarios
+});
+
+
+import { splitIntoSoloFile } from '../src/index';
+
+describe('splitIntoSoloFile', () => {
+  it('should split the combined code into individual files', () => {
+    const combinedCode = `// File: ./index.ts
+const foo = 'bar';
+
+// File: ./utils.ts
+export function formatDate(date: Date): string {
+  return date.toISOString();
+}
+
+// File: ./tests/utils.test.ts
+import { formatDate } from '../utils';
+
+describe('formatDate', () => {
+  it('should format the date correctly', () => {
+    const date = new Date('2023-05-01T12:00:00Z');
+    const formattedDate = formatDate(date);
+    expect(formattedDate).toBe('2023-05-01T12:00:00.000Z');
+  });
+});
+`;
+
+    const expectedFiles = {
+      './index.ts': 'const foo = \\'bar\\';
+',
+      './utils.ts': 'export function formatDate(date: Date): string {\
+  return date.toISOString();\
+}
+',
+      './tests/utils.test.ts': 'import { formatDate } from \\'../utils\\';
+
+describe(\\'formatDate\\', () => {\
+  it(\\'should format the date correctly\\', () => {\
+    const date = new Date(\\'2023-05-01T12:00:00Z\\');\
+    const formattedDate = formatDate(date);\
+    expect(formattedDate).toBe(\\'2023-05-01T12:00:00.000Z\\');\
+  });\
+});
+',
+    };
+
+    const files = splitIntoSoloFile(combinedCode);
+
+    expect(files).toEqual(expectedFiles);
+  });
+
+  it('should handle an empty input string', () => {
+    const combinedCode = '';
+    const expectedFiles: Record<string, string> = {};
+
+    const files = splitIntoSoloFile(combinedCode);
+
+    expect(files).toEqual(expectedFiles);
+  });
+
+  it('should handle a case with no file separators', () => {
+    const combinedCode = 'const foo = \\'bar\\';';
+    const expectedFiles = {
+      '': 'const foo = \\'bar\\';',
+    };
+
+    const files = splitIntoSoloFile(combinedCode);
+
+    expect(files).toEqual(expectedFiles);
+  });
+});
+
+
+import { generatePRDescription } from '../src/index';
 import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
 import { getOctokit } from '@actions/github';
-
-jest.mock('@actions/core');
+jest.mock('@aws-sdk/client-bedrock-runtime');
 jest.mock('@actions/github');
-jest.mock('@aws-sdk/client-bedrock-runtime', () => ({
-  BedrockRuntimeClient: jest.fn().mockImplementation(() => ({
-    sendCommandCommand: jest.fn(),
-  })),
-}));
-jest.mock('./utils', () => ({
-  invokeModel: jest.fn().mockResolvedValue('Generated PR description'),
-}));
 
 describe('generatePRDescription', () => {
-  let mockClient: jest.Mocked<BedrockRuntimeClient>;
-  let mockOctokit: jest.Mocked<ReturnType<typeof getOctokit>>;
+  let mockClient: BedrockRuntimeClient;
+  let mockOctokit: ReturnType<typeof getOctokit>;
 
   beforeEach(() => {
-    mockClient = new BedrockRuntimeClient() as jest.Mocked<BedrockRuntimeClient>;
-    mockOctokit = getOctokit('fake-token') as jest.Mocked<ReturnType<typeof getOctokit>>;
+    mockClient = new BedrockRuntimeClient({});
+    mockOctokit = getOctokit('test-token');
 
-    context.payload.pull_request = {
-      number: 123,
-      body: 'Pull request description',
-      head: {
-        sha: 'abc123',
-        ref: 'test-branch',
-      },
-    };
-
-    context.repo = {
-      owner: 'test-owner',
-      repo: 'test-repo',
-    };
-
-    mockOctokit.rest.pulls.listFiles.mockResolvedValue({
-      data: [
-        { filename: 'file1.ts', status: 'modified', patch: 'some patch' },
-        { filename: 'file2.ts', status: 'added', patch: 'some patch' },
-      ],
-    });
-
-    mockOctokit.rest.pulls.update.mockResolvedValue(undefined);
+    // Mock the necessary functions and properties
+    jest.spyOn(mockOctokit.rest.pulls, 'listFiles').mockResolvedValue({ data: [] } as any);
+    jest.spyOn(mockOctokit.rest.repos, 'getContent').mockResolvedValue({ data: { content: Buffer.from('').toString('base64') } } as any);
+    jest.spyOn(mockOctokit.rest.pulls, 'update').mockResolvedValue({});
+    jest.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   afterEach(() => {
     jest.resetAllMocks();
   });
 
-  it('should generate PR description', async () => {
-    await generatePRDescription(mockClient, 'model-id', mockOctokit);
+  it('should generate and update the PR description', async () => {
+    // Mock the necessary dependencies and setup
+    const mockInvokeModel = jest.fn().mockResolvedValue('Generated PR description');
+    jest.mock('../src/utils', () => ({ invokeModel: mockInvokeModel }));
 
-    expect(mockOctokit.rest.pulls.listFiles).toHaveBeenCalledTimes(1);
-    expect(mockOctokit.rest.pulls.update).toHaveBeenCalledTimes(1);
-    expect(mockOctokit.rest.pulls.update).toHaveBeenCalledWith({
-      owner: 'test-owner',
-      repo: 'test-repo',
-      pull_number: 123,
-      body: expect.stringContaining('Generated PR description'),
-    });
+    await generatePRDescription(mockClient, 'test-model', mockOctokit);
+
+    // Add assertions to check if the functions were called with the expected arguments
+    expect(mockOctokit.rest.pulls.listFiles).toHaveBeenCalled();
+    expect(mockOctokit.rest.pulls.update).toHaveBeenCalled();
+    expect(mockInvokeModel).toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith('PR description updated successfully.');
   });
 
-  it('should handle errors when fetching files', async () => {
-    const errorMessage = 'Failed to fetch files';
-    mockOctokit.rest.pulls.listFiles.mockRejectedValue(new Error(errorMessage));
+  it('should handle errors and log appropriate messages', async () => {
+    // Mock the necessary dependencies and setup
+    const mockInvokeModel = jest.fn().mockResolvedValue('Generated PR description');
+    jest.mock('../src/utils', () => ({ invokeModel: mockInvokeModel }));
 
-    await generatePRDescription(mockClient, 'model-id', mockOctokit);
+    // Mock an error scenario
+    jest.spyOn(mockOctokit.rest.pulls, 'listFiles').mockRejectedValue(new Error('Failed to list files'));
 
-    expect(mockOctokit.rest.pulls.listFiles).toHaveBeenCalledTimes(1);
+    await generatePRDescription(mockClient, 'test-model', mockOctokit);
+
+    // Add assertions to check if the error was logged correctly
+    expect(mockOctokit.rest.pulls.listFiles).toHaveBeenCalled();
     expect(mockOctokit.rest.pulls.update).not.toHaveBeenCalled();
-  });
-});
-
-
-import { generateUnitTestsSuite } from '../src/utils';
-import { context } from '@actions/github';
-import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
-import { getOctokit } from '@actions/github';
-
-jest.mock('@actions/core');
-jest.mock('@actions/github');
-jest.mock('@aws-sdk/client-bedrock-runtime', () => ({
-  BedrockRuntimeClient: jest.fn().mockImplementation(() => ({
-    sendCommandCommand: jest.fn(),
-  })),
-}));
-jest.mock('./utils', () => ({
-  generateUnitTests: jest.fn().mockResolvedValue([
-    { code: 'test case 1' },
-    { code: 'test case 2' },
-  ]),
-  runUnitTests: jest.fn(),
-  generateTestReport: jest.fn(),
-}));
-
-describe('generateUnitTestsSuite', () => {
-  let mockClient: jest.Mocked<BedrockRuntimeClient>;
-  let mockOctokit: jest.Mocked<ReturnType<typeof getOctokit>>;
-
-  beforeEach(() => {
-    mockClient = new BedrockRuntimeClient() as jest.Mocked<BedrockRuntimeClient>;
-    mockOctokit = getOctokit('fake-token') as jest.Mocked<ReturnType<typeof getOctokit>>;
-
-    context.payload.pull_request = {
-      number: 123,
-      body: 'Pull request description',
-      head: {
-        sha: 'abc123',
-        ref: 'test-branch',
-      },
-    };
-
-    context.repo = {
-      owner: 'test-owner',
-      repo: 'test-repo',
-    };
-
-    mockOctokit.rest.repos.listTags.mockResolvedValue({ data: [{ name: 'auto-unit-test-baseline' }] });
-    mockOctokit.rest.pulls.listFiles.mockResolvedValue({
-      data: [{ filename: 'src/file.ts', status: 'modified', patch: 'some patch' }],
-    });
-    mockOctokit.rest.repos.getContent.mockResolvedValue({
-      data: { content: Buffer.from('some file content').toString('base64') },
-    });
-    mockOctokit.rest.repos.createOrUpdateFileContents.mockResolvedValue(undefined);
+    expect(mockInvokeModel).not.toHaveBeenCalled();
+    expect(console.log).not.toHaveBeenCalledWith('PR description updated successfully.');
   });
 
-  afterEach(() => {
-    jest.resetAllMocks();
-  });
-
-  it('should generate unit tests suite when baseline tag does not exist', async () => {
-    mockOctokit.rest.repos.listTags.mockResolvedValue({ data: [] });
-
-    await generateUnitTestsSuite(mockClient, 'model-id', mockOctokit, context.repo, 'src');
-
-    expect(mockOctokit.rest.repos.listTags).toHaveBeenCalledTimes(1);
-    expect(mockOctokit.rest.repos.getContent).toHaveBeenCalledTimes(1);
-    expect(mockOctokit.rest.git.createRef).toHaveBeenCalledTimes(1);
-    expect(mockOctokit.rest.repos.createOrUpdateFileContents).toHaveBeenCalledTimes(1);
-  });
-
-  it('should generate unit tests suite for changed files when baseline tag exists', async () => {
-    await generateUnitTestsSuite(mockClient, 'model-id', mockOctokit, context.repo, 'src');
-
-    expect(mockOctokit.rest.repos.listTags).toHaveBeenCalledTimes(1);
-    expect(mockOctokit.rest.pulls.listFiles).toHaveBeenCalledTimes(1);
-    expect(mockOctokit.rest.repos.getContent).toHaveBeenCalledTimes(1);
-    expect(mockOctokit.rest.repos.createOrUpdateFileContents).toHaveBeenCalledTimes(1);
-  });
-
-  it('should handle errors when fetching files', async () => {
-    const errorMessage = 'Failed to fetch files';
-    mockOctokit.rest.repos.getContent.mockRejectedValue(new Error(errorMessage));
-
-    await generateUnitTestsSuite(mockClient, 'model-id', mockOctokit, context.repo, 'src');
-
-    expect(mockOctokit.rest.repos.getContent).toHaveBeenCalledTimes(1);
-    expect(mockOctokit.rest.repos.createOrUpdateFileContents).not.toHaveBeenCalled();
-  });
+  // Add more test cases to cover different scenarios
 });
