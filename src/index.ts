@@ -378,7 +378,7 @@ Maintain a constructive and educational tone. Be thorough but not overly pedanti
 </code_change>
 
 <detailed_task_description>
-Review the provided code change, considering the following aspects:
+Review the provided code change, which is presented in diff format. Lines starting with '+' are additions, and lines starting with '-' are removals. Consider the following aspects:
 1. Design: Evaluate the overall design and how it integrates with the existing system.
 2. Functionality: Assess if the code does what it's intended to do and if it's good for the users.
 3. Complexity: Check if the code is more complex than necessary.
@@ -435,7 +435,7 @@ Maintain a constructive and educational tone. Be thorough but not overly pedanti
 </code_change>
 
 <detailed_task_description>
-Review the provided code change, considering the following aspects:
+Review the provided code change, which is presented in diff format. Lines starting with '+' are additions, and lines starting with '-' are removals. Consider the following aspects:
 1. Design: Evaluate the overall design and how it integrates with the existing system.
 2. Functionality: Assess if the code does what it's intended to do and if it's good for the users.
 3. Complexity: Check if the code is more complex than necessary.
@@ -500,25 +500,18 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
       // Split the patch into hunks
       const hunks = file.patch.split(/^@@\s+-\d+,\d+\s+\+\d+,\d+\s+@@/m);
       let totalPosition = 0;
-
+      console.log(`Debugging Hunks: ${hunks}`);
       for (const [hunkIndex, hunk] of hunks.entries()) {
         if (hunkIndex === 0) continue; // Skip the first element (it's empty due to the split)
         const hunkLines = hunk.split('\n').slice(1); // Remove the hunk header
-        const changedLines = hunkLines
-          .filter(line => line.startsWith('+') && !line.startsWith('+++'))
-          .map(line => line.substring(1));
-        // console.log(`  Hunk ${hunkIndex} content: ${hunk} with changed lines: ${changedLines}`);
 
-        if (changedLines.length === 0) continue;
-
-        const fileContent = changedLines.join('\n');
-
-        // two options for review level: detailed and concise
+        // Include all lines in the hunk, preserving '+' and '-' prefixes
+        const diffContent = hunkLines.join('\n');
+        console.log(`Debugging Diff content: ${diffContent}`);
         const promptTemplate = reviewLevel === 'detailed' ? detailed_review_prompt : concise_review_prompt;
-        let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', fileContent);
+        let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', diffContent);
 
-        // get the actual language name from the language code
-        const languageName = languageCodeToName[outputLanguage as LanguageCode] || 'English'; // Default to English if the language code is not found
+        const languageName = languageCodeToName[outputLanguage as LanguageCode] || 'English';
         if (!(outputLanguage in languageCodeToName)) {
           core.warning(`Unsupported output language: ${outputLanguage}. Defaulting to English.`);
         }
@@ -541,7 +534,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
           if (line.startsWith('+') && !line.startsWith('+++')) {
             // Check if the added line is a comment or actual code
             if (!line.trim().startsWith('//') && !line.trim().startsWith('/*')) {
-              console.log(`Review comments ${review} generated for file: ${file.filename} with position: ${hunkPosition}`);
+              // console.log(`Review comments ${review} generated for file: ${file.filename} with position: ${hunkPosition}`);
               reviewComments.push({
                 path: file.filename,
                 position: hunkPosition,
