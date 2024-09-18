@@ -473,7 +473,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
   const pullRequest = context.payload.pull_request as PullRequest;
   const repo = context.repo;
 
-  // fetch the list of files changed in the PR each time since the file can be changed in operation like unit test generation, code review, etc.
+  // fetch the list of files changed in the PR each time since the file can be changed in operation like unit test generation etc.
   const { data: files } = await octokit.rest.pulls.listFiles({
     ...repo,
     pull_number: pullRequest.number,
@@ -563,6 +563,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
   }
 
   if (reviewComments.length > 0) {
+    // TODO: solve the performance issue that the review comments may overwhelm the server and lead 502 error
     try {
       await octokit.rest.pulls.createReview({
         ...repo,

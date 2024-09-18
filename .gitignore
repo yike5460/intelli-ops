@@ -17,4 +17,5 @@ build
 .vercel
 .aider*
 /tmp
+dist
 tmp.rm.later
