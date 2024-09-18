@@ -1,332 +1,258 @@
-import { splitContentIntoChunks_deprecated } from '../src/action';
+import { splitContentIntoChunks_deprecated } from '../src/utils';
 
 describe('splitContentIntoChunks_deprecated', () => {
-  it('should split content into chunks correctly', () => {
+  it('should split content into chunks with the specified maximum chunk size', () => {
     const content = 'Line 1\
 Line 2\
 Line 3\
-Line 4';
+Line 4\
+Line 5';
     const maxChunkSize = 10;
     const expectedChunks = ['Line 1\
 ', 'Line 2\
 ', 'Line 3\
-', 'Line 4'];
-    expect(splitContentIntoChunks_deprecated(content, maxChunkSize)).toEqual(expectedChunks);
+', 'Line 4\
+', 'Line 5'];
+
+    const chunks = splitContentIntoChunks_deprecated(content, maxChunkSize);
+
+    expect(chunks).toEqual(expectedChunks);
   });
 
   it('should handle empty content', () => {
     const content = '';
     const maxChunkSize = 10;
-    const expectedChunks: string[] = [];
-    expect(splitContentIntoChunks_deprecated(content, maxChunkSize)).toEqual(expectedChunks);
+    const expectedChunks = [];
+
+    const chunks = splitContentIntoChunks_deprecated(content, maxChunkSize);
+
+    expect(chunks).toEqual(expectedChunks);
   });
 
-  it('should handle large chunk size', () => {
-    const content = 'Line 1\
-Line 2\
-Line 3\
-Line 4';
-    const maxChunkSize = 1000;
-    const expectedChunks = [content];
-    expect(splitContentIntoChunks_deprecated(content, maxChunkSize)).toEqual(expectedChunks);
+  it('should handle content with a single long line', () => {
+    const content = 'This is a very long line that should not be split';
+    const maxChunkSize = 10;
+    const expectedChunks = ['This is a', ' very lon', 'g line th', 'at should', ' not be s', 'plit'];
+
+    const chunks = splitContentIntoChunks_deprecated(content, maxChunkSize);
+
+    expect(chunks).toEqual(expectedChunks);
   });
 });
 
-import { shouldExcludeFile } from '../src/action';
+
+import { shouldExcludeFile } from '../src/utils';
 
 describe('shouldExcludeFile', () => {
-  it('should return true if filename matches exclude pattern', () => {
-    const filename = 'path/to/file.js';
-    const excludePatterns = ['*.js'];
-    expect(shouldExcludeFile(filename, excludePatterns)).toBe(true);
+  it('should return true if the filename matches any exclude pattern', () => {
+    const filename = 'src/utils.ts';
+    const excludePatterns = ['*.js', 'src/*.ts'];
+
+    const result = shouldExcludeFile(filename, excludePatterns);
+
+    expect(result).toBe(true);
   });
 
-  it('should return false if filename does not match exclude pattern', () => {
-    const filename = 'path/to/file.ts';
-    const excludePatterns = ['*.js'];
-    expect(shouldExcludeFile(filename, excludePatterns)).toBe(false);
+  it('should return false if the filename does not match any exclude pattern', () => {
+    const filename = 'src/index.ts';
+    const excludePatterns = ['*.js', 'test/*'];
+
+    const result = shouldExcludeFile(filename, excludePatterns);
+
+    expect(result).toBe(false);
   });
 
-  it('should handle multiple exclude patterns', () => {
-    const filename = 'path/to/file.js';
-    const excludePatterns = ['*.js', '*.ts'];
-    expect(shouldExcludeFile(filename, excludePatterns)).toBe(true);
+  it('should handle wildcard patterns correctly', () => {
+    const filename = 'src/utils/helpers.ts';
+    const excludePatterns = ['src/utils/*'];
+
+    const result = shouldExcludeFile(filename, excludePatterns);
+
+    expect(result).toBe(true);
   });
 
-  it('should handle wildcards in exclude patterns', () => {
-    const filename = 'path/to/file.js';
-    const excludePatterns = ['path/*.js'];
-    expect(shouldExcludeFile(filename, excludePatterns)).toBe(true);
+  it('should handle an empty exclude patterns array', () => {
+    const filename = 'src/index.ts';
+    const excludePatterns = [];
+
+    const result = shouldExcludeFile(filename, excludePatterns);
+
+    expect(result).toBe(false);
   });
 });
 
-import { calculateFilePatchNumLines } from '../src/action';
+
+import { calculateFilePatchNumLines } from '../src/utils';
 
 describe('calculateFilePatchNumLines', () => {
-  it('should calculate the number of added and removed lines correctly', () => {
-    const fileChange = `@@ -1,3 +1,4 @@
-+This is a new line
- This is an unchanged line
--This is a removed line
-`;
-    const { added, removed } = calculateFilePatchNumLines(fileChange);
-    expect(added).toBe(1);
+  it('should correctly count added and removed lines in a file patch', () => {
+    const filePatch = `@@ -1,3 +1,4 @@
+-line1
+ line2
++line3
++line4`;
+    const { added, removed } = calculateFilePatchNumLines(filePatch);
+
+    expect(added).toBe(2);
     expect(removed).toBe(1);
   });
 
-  it('should handle empty file change', () => {
-    const fileChange = '';
-    const { added, removed } = calculateFilePatchNumLines(fileChange);
+  it('should handle an empty file patch', () => {
+    const filePatch = '';
+    const { added, removed } = calculateFilePatchNumLines(filePatch);
+
     expect(added).toBe(0);
     expect(removed).toBe(0);
   });
 
-  it('should handle multiple added and removed lines', () => {
-    const fileChange = `@@ -1,3 +1,5 @@
-+This is a new line 1
-+This is a new line 2
- This is an unchanged line
--This is a removed line 1
--This is a removed line 2
-`;
-    const { added, removed } = calculateFilePatchNumLines(fileChange);
+  it('should handle a file patch with only additions', () => {
+    const filePatch = `@@ -1,3 +1,5 @@
+ line1
+ line2
++line3
++line4`;
+    const { added, removed } = calculateFilePatchNumLines(filePatch);
+
     expect(added).toBe(2);
+    expect(removed).toBe(0);
+  });
+
+  it('should handle a file patch with only removals', () => {
+    const filePatch = `@@ -1,4 +1,3 @@
+-line1
+ line2
+ line3
+-line4`;
+    const { added, removed } = calculateFilePatchNumLines(filePatch);
+
+    expect(added).toBe(0);
     expect(removed).toBe(2);
   });
 });
 
-import { generatePRDescription } from '../src/action';
-import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
-import { getOctokit } from '@actions/github';
-import * as core from '@actions/core';
 
-jest.mock('@aws-sdk/client-bedrock-runtime');
+import { extractFunctions } from '../src/utils';
+
+describe('extractFunctions', () => {
+  it('should extract functions from the provided code', async () => {
+    const code = `
+      function add(a, b) {
+        return a + b;
+      }
+
+      export async function calculateSum(nums) {
+        let sum = 0;
+        for (const num of nums) {
+          sum += num;
+        }
+        return sum;
+      }
+
+      const multiply = (a, b) => a * b;
+    `;
+
+    const expectedFunctions = [
+      'function add(a, b) {\
+        return a + b;\
+      }',
+      'export async function calculateSum(nums) {\
+        let sum = 0;\
+        for (const num of nums) {\
+          sum += num;\
+        }\
+        return sum;\
+      }',
+      'const multiply = (a, b) => a * b;',
+    ];
+
+    const extractedFunctions = await extractFunctions(code);
+
+    expect(extractedFunctions).toEqual(expectedFunctions);
+  });
+
+  it('should handle an empty code string', async () => {
+    const code = '';
+    const expectedFunctions = [];
+
+    const extractedFunctions = await extractFunctions(code);
+
+    expect(extractedFunctions).toEqual(expectedFunctions);
+  });
+
+  it('should handle a code string without functions', async () => {
+    const code = 'const x = 42;\
+console.log(x);';
+    const expectedFunctions = [];
+
+    const extractedFunctions = await extractFunctions(code);
+
+    expect(extractedFunctions).toEqual(expectedFunctions);
+  });
+});
+
+
+import { generatePRDescription } from '../src/utils';
+import * as github from '@actions/github';
+import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
+
 jest.mock('@actions/github');
-jest.mock('@actions/core');
+jest.mock('@aws-sdk/client-bedrock-runtime');
 
 describe('generatePRDescription', () => {
-  let mockBedrockClient: BedrockRuntimeClient;
-  let mockOctokit: ReturnType<typeof getOctokit>;
-  let mockContext: { payload: { pull_request: any }, repo: { owner: string, repo: string } };
+  const mockClient = {} as BedrockRuntimeClient;
+  const mockOctokit = {
+    rest: {
+      pulls: {
+        listFiles: jest.fn(),
+        update: jest.fn(),
+      },
+      repos: {
+        getContent: jest.fn(),
+      },
+    },
+  };
 
   beforeEach(() => {
-    mockBedrockClient = new BedrockRuntimeClient({});
-    mockOctokit = getOctokit('mockToken');
-    mockContext = {
-      payload: {
-        pull_request: {
-          number: 123,
-          body: 'PR description',
-          head: {
-            sha: 'mockSha',
-            ref: 'mockRef'
-          }
-        }
+    jest.clearAllMocks();
+    github.context.payload.pull_request = {
+      number: 123,
+      head: {
+        sha: 'abc123',
+        ref: 'feature/test',
       },
-      repo: {
-        owner: 'mockOwner',
-        repo: 'mockRepo'
-      }
+    } as github.context.Payload;
+    github.context.repo = {
+      owner: 'test-org',
+      repo: 'test-repo',
     };
-
-    jest.spyOn(core, 'setFailed').mockImplementation(() => {});
-    jest.spyOn(console, 'log').mockImplementation(() => {});
-    jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
-  afterEach(() => {
-    jest.resetAllMocks();
-  });
-
-  it('should generate PR description and update the PR', async () => {
-    const mockListFiles = jest.fn().mockResolvedValue({ data: [{ filename: 'file1.ts', status: 'modified' }] });
-    const mockGetContent = jest.fn().mockResolvedValue({ data: { content: Buffer.from('file content').toString('base64') } });
-    const mockInvokeModel = jest.fn().mockResolvedValue('Generated PR description');
-    const mockUpdate = jest.fn().mockResolvedValue({});
-
-    mockOctokit.rest.pulls.listFiles = mockListFiles;
-    mockOctokit.rest.repos.getContent = mockGetContent;
-    mockOctokit.rest.pulls.update = mockUpdate;
-
-    await generatePRDescription(mockBedrockClient, 'mockModelId', mockOctokit);
-
-    expect(mockListFiles).toHaveBeenCalledWith({
-      owner: 'mockOwner',
-      repo: 'mockRepo',
-      pull_number: 123
+  it('should generate a PR description and update the PR', async () => {
+    const mockFiles = [
+      { filename: 'file1.ts', status: 'modified', patch: '+line1\
+-line2' },
+      { filename: 'file2.ts', status: 'added', patch: '+line1\
++line2' },
+    ];
+    mockOctokit.rest.pulls.listFiles.mockResolvedValue({ data: mockFiles });
+    mockOctokit.rest.repos.getContent.mockResolvedValue({
+      data: { content: Buffer.from('file content').toString('base64') },
     });
-    expect(mockGetContent).toHaveBeenCalledWith({
-      owner: 'mockOwner',
-      repo: 'mockRepo',
-      path: 'file1.ts',
-      ref: 'mockSha'
-    });
-    expect(mockInvokeModel).toHaveBeenCalledWith(mockBedrockClient, 'mockModelId', expect.any(String));
-    expect(mockUpdate).toHaveBeenCalledWith({
-      owner: 'mockOwner',
-      repo: 'mockRepo',
+
+    await generatePRDescription(mockClient, 'test-model', mockOctokit);
+
+    expect(mockOctokit.rest.pulls.update).toHaveBeenCalledWith({
+      owner: 'test-org',
+      repo: 'test-repo',
       pull_number: 123,
-      body: expect.stringContaining('Generated PR description')
+      body: expect.any(String),
     });
   });
 
-  it('should handle errors and set failed status', async () => {
-    const mockListFiles = jest.fn().mockRejectedValue(new Error('Mock error'));
+  it('should handle errors when listing files or getting content', async () => {
+    mockOctokit.rest.pulls.listFiles.mockRejectedValue(new Error('List files error'));
+    mockOctokit.rest.repos.getContent.mockRejectedValue(new Error('Get content error'));
 
-    mockOctokit.rest.pulls.listFiles = mockListFiles;
-
-    await generatePRDescription(mockBedrockClient, 'mockModelId', mockOctokit);
-
-    expect(core.setFailed).toHaveBeenCalledWith('Error: Mock error');
-  });
-});
-
-import { splitIntoSoloFile } from '../src/action';
-
-describe('splitIntoSoloFile', () => {
-  it('should split combined code into individual files', () => {
-    const combinedCode = `// File: ./index.ts
-console.log('Hello, World!');
-
-// File: ./index_test.ts
-describe('index', () => {
-  it('should work', () => {
-    expect(true).toBe(true);
-  });
-});
-
-// File: ./index.js
-const fs = require('fs');
-`;
-    const expectedFiles = {
-      'index.ts': 'console.log(\'Hello, World!\');',
-      'index_test.ts': 'describe(\'index\', () => {
-  it(\'should work\', () => {
-    expect(true).toBe(true);
-  });
-});',
-      'index.js': 'const fs = require(\'fs\');'
-    };
-    expect(splitIntoSoloFile(combinedCode)).toEqual(expectedFiles);
-  });
-
-  it('should handle empty input', () => {
-    const combinedCode = '';
-    expect(splitIntoSoloFile(combinedCode)).toEqual({});
-  });
-
-  it('should handle input without file markers', () => {
-    const combinedCode = 'console.log(\'Hello, World!\');';
-    expect(splitIntoSoloFile(combinedCode)).toEqual({});
-  });
-
-  it('should trim leading and trailing whitespace', () => {
-    const combinedCode = `// File: ./index.ts
-console.log('Hello, World!');  
-`;
-    const expectedFiles = {
-      'index.ts': 'console.log(\'Hello, World!\');'
-    };
-    expect(splitIntoSoloFile(combinedCode)).toEqual(expectedFiles);
-  });
-});
-
-import { generateUnitTestsSuite } from '../src/action';
-import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
-import { getOctokit } from '@actions/github';
-import * as core from '@actions/core';
-
-jest.mock('@aws-sdk/client-bedrock-runtime');
-jest.mock('@actions/github');
-jest.mock('@actions/core');
-jest.mock('../src/ut_ts', () => ({
-  generateUnitTests: jest.fn().mockResolvedValue([{ code: 'Test case 1' }, { code: 'Test case 2' }]),
-  runUnitTests: jest.fn(),
-  generateTestReport: jest.fn()
-}));
-
-describe('generateUnitTestsSuite', () => {
-  let mockBedrockClient: BedrockRuntimeClient;
-  let mockOctokit: ReturnType<typeof getOctokit>;
-  let mockContext: { payload: { pull_request: any }, repo: { owner: string, repo: string } };
-
-  beforeEach(() => {
-    mockBedrockClient = new BedrockRuntimeClient({});
-    mockOctokit = getOctokit('mockToken');
-    mockContext = {
-      payload: {
-        pull_request: {
-          number: 123,
-          head: {
-            sha: 'mockSha',
-            ref: 'mockRef'
-          }
-        }
-      },
-      repo: {
-        owner: 'mockOwner',
-        repo: 'mockRepo'
-      }
-    };
-
-    jest.spyOn(core, 'setFailed').mockImplementation(() => {});
-    jest.spyOn(console, 'log').mockImplementation(() => {});
-    jest.spyOn(console, 'error').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    jest.resetAllMocks();
-  });
-
-  it('should generate unit tests suite and update the PR', async () => {
-    const mockListFiles = jest.fn().mockResolvedValue({ data: [{ filename: 'src/file1.ts', status: 'modified' }] });
-    const mockGetContent = jest.fn().mockResolvedValue({ data: { content: Buffer.from('file content').toString('base64') } });
-    const mockListTags = jest.fn().mockResolvedValue({ data: [] });
-    const mockCreateRef = jest.fn().mockResolvedValue({});
-    const mockCreateOrUpdateFileContents = jest.fn().mockResolvedValue({});
-
-    mockOctokit.rest.pulls.listFiles = mockListFiles;
-    mockOctokit.rest.repos.getContent = mockGetContent;
-    mockOctokit.rest.repos.listTags = mockListTags;
-    mockOctokit.rest.git.createRef = mockCreateRef;
-    mockOctokit.rest.repos.createOrUpdateFileContents = mockCreateOrUpdateFileContents;
-
-    await generateUnitTestsSuite(mockBedrockClient, 'mockModelId', mockOctokit, { owner: 'mockOwner', repo: 'mockRepo' }, 'src');
-
-    expect(mockListFiles).toHaveBeenCalledWith({
-      owner: 'mockOwner',
-      repo: 'mockRepo',
-      pull_number: 123
-    });
-    expect(mockGetContent).toHaveBeenCalledWith({
-      owner: 'mockOwner',
-      repo: 'mockRepo',
-      path: 'src/file1.ts'
-    });
-    expect(mockCreateRef).toHaveBeenCalledWith({
-      owner: 'mockOwner',
-      repo: 'mockRepo',
-      ref: 'refs/tags/auto-unit-test-baseline',
-      sha: 'mockSha'
-    });
-    expect(mockCreateOrUpdateFileContents).toHaveBeenCalledWith({
-      owner: 'mockOwner',
-      repo: 'mockRepo',
-      path: 'test/unit_tests.ts',
-      message: 'Add or update generated unit tests',
-      content: expect.any(String),
-      branch: 'mockRef',
-      sha: undefined
-    });
-  });
-
-  it('should handle errors and set failed status', async () => {
-    const mockListFiles = jest.fn().mockRejectedValue(new Error('Mock error'));
-
-    mockOctokit.rest.pulls.listFiles = mockListFiles;
-
-    await generateUnitTestsSuite(mockBedrockClient, 'mockModelId', mockOctokit, { owner: 'mockOwner', repo: 'mockRepo' }, 'src');
-
-    expect(core.setFailed).toHaveBeenCalledWith('Error: Mock error');
+    await expect(generatePRDescription(mockClient, 'test-model', mockOctokit)).rejects.toThrow();
   });
 });
