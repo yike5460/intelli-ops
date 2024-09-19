@@ -8,8 +8,7 @@ if (!process.env.GITHUB_APP_TOKEN) {
   process.exit(1);
 }
 
-export const octokit = new Octokit({ auth: process.env.GITHUB_APP_TOKEN });
-
+const octokit = new Octokit({ auth: process.env.GITHUB_APP_TOKEN });
 const bedrockClient = new BedrockRuntimeClient({ region: 'us-east-1' });
 const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0'; // Replace with your desired model ID
 const unitTestPrompt = "Generate unit tests for the following code: {{SOURCE_CODE}}";

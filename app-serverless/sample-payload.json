@@ -1,0 +1,29 @@
+{
+  "action": "created",
+  "issue": {
+    "number": 1,
+    "html_url": "https://github.com/example/repo/issues/1",
+    "body": "This is the original issue body",
+    "pull_request": {
+      "url": "https://api.github.com/repos/example/repo/pulls/1"
+    }
+  },
+  "comment": {
+    "id": 1,
+    "body": "@IBTBot What is AI-native DevOps?",
+    "user": {
+      "login": "example-user"
+    },
+    "created_at": "2023-04-15T12:00:00Z"
+  },
+  "repository": {
+    "full_name": "example/repo",
+    "owner": {
+      "login": "example"
+    },
+    "name": "repo"
+  },
+  "sender": {
+    "login": "example-user"
+  }
+}
