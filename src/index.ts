@@ -32,6 +32,9 @@ interface PullFile {
 // Define the LanguageCode type
 type LanguageCode = 'en' | 'zh' | 'ja' | 'es' | 'fr' | 'de' | 'it';
 
+const PR_DESCRIPTION_HEADER = "🤖 AI-Generated PR Description (Powered by Amazon Bedrock)";
+const CODE_REVIEW_HEADER = "🔍 AI Code Review (Powered by Amazon Bedrock)";
+
 // Update the languageCodeToName object with the correct type
 const languageCodeToName: Record<LanguageCode, string> = {
   'en': 'English',
@@ -127,6 +130,7 @@ function calculateFilePatchNumLines(fileChange: string): { added: number, remove
   return { added, removed };
 }
 
+
 export async function generatePRDescription(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>): Promise<void> {
 
   const pullRequest = context.payload.pull_request as PullRequest;
@@ -142,7 +146,7 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
     try {
       if (file.status === 'removed') {
         const { added, removed } = calculateFilePatchNumLines(file.patch as string);
-        statsSummary.push({file: file.filename, added: 0, removed: removed, summary: ''});
+        statsSummary.push({file: file.filename, added: 0, removed: removed, summary: 'This file is removed in this PR'});
         return `${file.filename}: removed`;
       } else {
         const { data: content } = await octokit.rest.repos.getContent({
@@ -172,9 +176,8 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
 
   const fixedDescription =
   `
-
+## File Stats Summary
 <details>
-<summary>## File Stats Summary</summary>
 
 The file changes summary is as follows:
 - File number involved in this PR: {{FILE_NUMBER}}
@@ -196,10 +199,13 @@ The file changes summary is as follows:
   // append fixed template content to the generated PR description
   const prDescriptionWithStats = prDescription + updatedDescription;
 
+  // Prepend the header to the PR description
+  const prDescriptionWithHeader = `${PR_DESCRIPTION_HEADER}\n\n${prDescriptionWithStats}`;
+
   await octokit.rest.pulls.update({
     ...repo,
     pull_number: pullRequest.number,
-    body: prDescriptionWithStats,
+    body: prDescriptionWithHeader,
   });
   console.log('PR description updated successfully.');
 }
@@ -542,12 +548,15 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
           continue;
         }
 
+        // Prepend the header to each review comment
+        const reviewWithHeader = `${CODE_REVIEW_HEADER}\n\n${review}`;
+
         // add the generated review comments to the end of per hunk
         const position = totalPosition + 1;
         reviewComments.push({
           path: file.filename,
           position: position,
-          body: review,
+          body: reviewWithHeader,
         });
         totalPosition += hunkLines.length;
       }
