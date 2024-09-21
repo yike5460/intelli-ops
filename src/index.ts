@@ -174,6 +174,7 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
   const payloadInput = prDescriptionTemplate;
   const prDescription = await invokeModel(client, modelId, payloadInput);
 
+  // Fix the table column width using div element and inline HTML
   const fixedDescription =
   `
 ## File Stats Summary
@@ -184,16 +185,17 @@ File number involved in this PR: *{{FILE_NUMBER}}*, unfold to see the details:
 
 The file changes summary is as follows:
 
-| Files | Changes | Summary |
-|-------|---------|---------|
+| <div style="width:150px">Files</div> | <div style="width:160px">Changes</div> | <div style="width:320px">Summary</div> |
+|:-------|:--------|:--------------|
 {{FILE_CHANGE_SUMMARY}}
 
 </details>
   `
   const fileChangeSummary = statsSummary.map(file => {
-    const fileName = file.file.length > 30 ? file.file.substring(0, 30) + '...' : file.file;
+    // const fileName = file.file.length > 60 ? file.file.substring(0, 60) + '...' : file.file;
+    const fileName = file.file;
     const changes = `${file.added} added, ${file.removed} removed`;
-    return `| ${fileName.padEnd(30)} | ${changes.padEnd(60)} | ${file.summary || ''} |`
+    return `| ${fileName} | ${changes} | ${file.summary || ''} |`
   }).join('\n');
   const fileNumber = statsSummary.length.toString();
   const updatedDescription = fixedDescription
