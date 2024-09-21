@@ -191,9 +191,9 @@ The file changes summary is as follows:
 </details>
   `
   const fileChangeSummary = statsSummary.map(file => {
-    const fileName = file.file.length > 20 ? file.file.substring(0, 20) + '...' : file.file;
+    const fileName = file.file.length > 30 ? file.file.substring(0, 30) + '...' : file.file;
     const changes = `${file.added} added, ${file.removed} removed`;
-    return `| ${fileName.padEnd(20)} | ${changes.padEnd(30)} | ${file.summary || ''} |`
+    return `| ${fileName.padEnd(30)} | ${changes.padEnd(60)} | ${file.summary || ''} |`
   }).join('\n');
   const fileNumber = statsSummary.length.toString();
   const updatedDescription = fixedDescription
@@ -215,7 +215,7 @@ The file changes summary is as follows:
 }
 
 async function generateFileSummary(client: BedrockRuntimeClient, modelId: string, patch: string): Promise<string> {
-  const prompt = `Summarize the following code changes in one short sentence:\n\n${patch}`;
+  const prompt = `Summarize the following code changes into concise and clear description in less than 30 words:\n\n${patch}`;
   return await invokeModel(client, modelId, prompt);
 }
 
