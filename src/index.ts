@@ -190,9 +190,11 @@ The file changes summary is as follows:
 
 </details>
   `
-  const fileChangeSummary = statsSummary.map(file => 
-    `| ${file.file} | ${file.added} added, ${file.removed} removed | ${file.summary || ''} |`
-  ).join('\n');
+  const fileChangeSummary = statsSummary.map(file => {
+    const fileName = file.file.length > 20 ? file.file.substring(0, 20) + '...' : file.file;
+    const changes = `${file.added} added, ${file.removed} removed`;
+    return `| ${fileName.padEnd(20)} | ${changes.padEnd(30)} | ${file.summary || ''} |`
+  }).join('\n');
   const fileNumber = statsSummary.length.toString();
   const updatedDescription = fixedDescription
     .replace('{{FILE_CHANGE_SUMMARY}}', fileChangeSummary)
