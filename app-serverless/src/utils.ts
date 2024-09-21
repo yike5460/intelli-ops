@@ -1,5 +1,4 @@
 import { Octokit } from '@octokit/rest';
-import { getOctokit, context } from '@actions/github';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 
 // Check if GITHUB_APP_TOKEN is set
