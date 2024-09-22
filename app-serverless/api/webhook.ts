@@ -13,6 +13,7 @@ if (GITHUB_APP_TOKEN) {
   console.warn("GitHub App Token is not set. Some functionality may be limited.");
 }
 
+// Using Node.js as the runtime for Vercel Functions, the handler function is the entry point for all incoming requests, refer to the Vercel documentation for more information https://vercel.com/docs/functions/runtimes#nodejs
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log('Received request:', req.method, req.url);
   console.log('Headers:', JSON.stringify(req.headers, null, 2));
