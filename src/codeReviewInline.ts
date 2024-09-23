@@ -207,7 +207,9 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
   }
 
   if (reviewComments.length > 0) {
-    const summaryTemplate = `
+    let summaryTemplate = `
+{{CODE_REVIEW_HEADER}}
+
 Actionable comments posted: ${reviewComments.length}
 <details>
 <summary>Review Details</summary>
@@ -233,7 +235,7 @@ ${additionalCommentsDetails.map(file => `- ${file}`).join('\n')}
 </details>
 </details>
 `;
-
+    summaryTemplate = summaryTemplate.replace('{{CODE_REVIEW_HEADER}}', CODE_REVIEW_HEADER);
     try {
       await octokit.rest.pulls.createReview({
         ...repo,
