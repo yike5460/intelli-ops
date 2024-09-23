@@ -1,5 +1,14 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 
+export interface PullRequest {
+  number: number;
+  body: string;
+  head: {
+    sha: string;
+    ref: string;
+  };
+}
+
 export async function exponentialBackoff<T>(
   fn: () => Promise<T>,
   maxRetries: number,
