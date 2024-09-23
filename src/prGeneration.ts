@@ -113,6 +113,7 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
     // Fix the table column width using div element and inline HTML
     const fixedDescription =
     `
+
   ## File Stats Summary
   
   File number involved in this PR: *{{FILE_NUMBER}}*, unfold to see the details:
@@ -121,7 +122,7 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
   
   The file changes summary is as follows:
   
-  | <div style="width:150px">Files</div> | <div style="width:160px">Changes</div> | <div style="width:320px">Summary</div> |
+  | <div style="width:150px">Files</div> | <div style="width:160px">Changes</div> | <div style="width:320px">Change Summary</div> |
   |:-------|:--------|:--------------|
   {{FILE_CHANGE_SUMMARY}}
   

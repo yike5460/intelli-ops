@@ -1,5 +1,8 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 
+// Define the LanguageCode type
+export type LanguageCode = 'en' | 'zh' | 'ja' | 'es' | 'fr' | 'de' | 'it';
+
 export interface PullRequest {
   number: number;
   body: string;
@@ -9,6 +12,88 @@ export interface PullRequest {
   };
 }
 
+export interface PullFile {
+  filename: string;
+  status: string;
+  patch?: string;
+}
+
+// Update the languageCodeToName object with the correct type
+export const languageCodeToName: Record<LanguageCode, string> = {
+  'en': 'English',
+  'zh': 'Chinese',
+  'ja': 'Japanese',
+  'es': 'Spanish',
+  'fr': 'French',
+  'de': 'German',
+  'it': 'Italian',
+};
+
+// This function splits the content into chunks of maxChunkSize
+export function splitContentIntoChunks_deprecated(content: string, maxChunkSize: number): string[] {
+  const chunks: string[] = [];
+  let currentChunk = '';
+
+  content.split('\n').forEach(line => {
+    if (currentChunk.length + line.length > maxChunkSize) {
+      chunks.push(currentChunk);
+      currentChunk = '';
+    }
+    currentChunk += line + '\n';
+  });
+
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
+export function shouldExcludeFile(filename: string, excludePatterns: string[]): boolean {
+  return excludePatterns.some(pattern => {
+    const regex = new RegExp(`^${pattern.replace(/\*/g, '.*')}$`);
+    return regex.test(filename);
+  });
+}
+
+export function splitIntoSoloFile(combinedCode: string): Record<string, string> {
+  // split the whole combinedCode content into individual files (index.ts, index_test.ts, index.js) by recognize the character like: "// File: ./index.ts", filter the content with suffix ".tx" and not contain "test" in file name (index.ts),
+  const fileChunks: Record<string, string> = {};
+  const filePattern = /\/\/ File: \.\/(.+)/;
+  let currentFile = '';
+  let currentContent = '';
+
+  combinedCode.split('\n').forEach(line => {
+    const match = line.match(filePattern);
+    if (match) {
+      if (currentFile) {
+        fileChunks[currentFile] = currentContent.trim();
+      }
+      currentFile = match[1] as string;
+      currentContent = '';
+    } else {
+      currentContent += line + '\n';
+    }
+  });
+
+  if (currentFile) {
+    fileChunks[currentFile] = currentContent.trim();
+  }
+  return fileChunks;
+}
+
+export async function extractFunctions(content: string): Promise<string[]> {
+  // const functionPattern = /(?:export\s+)?(?:async\s+)?function\s+\w+\s*\([^)]*\)(?:\s*:\s*[^{]*?)?\s*{(?:[^{}]*|\{(?:[^{}]*|\{[^{}]*\})*\})*}/gs;
+  // const matches = content.match(functionPattern);
+  // return matches ? matches.map(match => match.trim()) : [];
+
+  // Dummy response for debugging purposes
+  return [
+    'export async function generateUnitTests(client: BedrockRuntimeClient, modelId: string, sourceCode: string): Promise<TestCase[]> { ... }',
+    'async function runUnitTests(testCases: TestCase[], sourceCode: string): Promise<void> { ... }',
+    'function generateTestReport(testCases: TestCase[]): Promise<void> { ... }',
+  ];
+}
 export async function exponentialBackoff<T>(
   fn: () => Promise<T>,
   maxRetries: number,
