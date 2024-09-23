@@ -7,6 +7,9 @@ export interface PullRequest {
         sha: string;
         ref: string;
     };
+    base: {
+        sha: string;
+    };
 }
 export interface PullFile {
     filename: string;

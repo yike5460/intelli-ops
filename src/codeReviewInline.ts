@@ -128,6 +128,13 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
   });
 
   let reviewComments: { path: string; position: number; body: string }[] = [];
+  let looksGoodToMeCount = 0;
+  let ignoredFilesCount = 0;
+  let selectedFilesCount = 0;
+  let additionalCommentsCount = 0;
+  let ignoredFilesDetails: string[] = [];
+  let selectedFilesDetails: string[] = [];
+  let additionalCommentsDetails: string[] = [];
 
   for (const file of files as PullFile[]) {
     // The sample contents of file.patch, which contains a unified diff representation of the changes made to a file in a pull request:
@@ -144,16 +151,18 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
 
     // console.log(`File patch content: ${file.patch} for file: ${file.filename}`);
     if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
+      selectedFilesCount++;
 
       // Split the patch into hunks
       const hunks = file.patch.split(/^@@\s+-\d+,\d+\s+\+\d+,\d+\s+@@/m);
+      selectedFilesDetails.push(`${file.filename} (${hunks.length - 1} hunks)`);
+
       let totalPosition = 0;
       console.log(`======================= Debugging Hunks of file: ${file.filename} ========================\n ${hunks}\n ================================================`);
       for (const [hunkIndex, hunk] of hunks.entries()) {
         if (hunkIndex === 0) continue; // Skip the first element (it's empty due to the split)
         const hunkLines = hunk.split('\n').slice(1); // Remove the hunk header
 
-        // Include all lines in the hunk, preserving '+' and '-' prefixes
         const diffContent = hunkLines.join('\n');
         console.log(`======================= Debugging Diff content ========================\n ${diffContent}\n ================================================`);
         const promptTemplate = reviewLevel === 'detailed' ? detailed_review_prompt : concise_review_prompt;
@@ -165,14 +174,16 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
         }
         formattedContent = formattedContent.replace('{{LANGUAGE_NAME}}', languageName);
 
-        // invoke model to generate review comments
         var review = await invokeModel(bedrockClient, modelId, formattedContent);  
-
-        // log the generated review comments and check if it is empty
-        // console.log(`Review comments ${review} generated for file: ${file.filename} in hunk ${hunkIndex} with file content: ${fileContent}`);
 
         if (!review || review.trim() == '') {
           console.warn(`No review comments generated for hunk ${hunkIndex} in file ${file.filename}, skipping`);
+          continue;
+        }
+
+        if (review.trim() === 'Looks Good To Me') {
+          looksGoodToMeCount++;
+          additionalCommentsDetails.push(`Skip posting review for hunk ${hunkIndex} in file ${file.filename} due to "Looks Good To Me"`);
           continue;
         }
 
@@ -189,18 +200,46 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
         totalPosition += hunkLines.length;
       }
     } else {
+      ignoredFilesCount++;
       console.log(`Skipping file: ${file.filename} due to the file being removed or explicitly excluded`);
+      ignoredFilesDetails.push(`${file.filename} is excluded by exclude rules`);
     }
   }
 
   if (reviewComments.length > 0) {
-    // TODO: solve the performance issue that the review comments may overwhelm the server and lead 502 error
+    const summaryTemplate = `
+Actionable comments posted: ${reviewComments.length}
+<details>
+<summary>Review Details</summary>
+<details>
+<summary>Review option chosen</summary>
+${reviewLevel}
+</details>
+<details>
+<summary>Commits</summary>
+Files that changed from the base of the PR and between ${pullRequest.base.sha} to ${pullRequest.head.sha}
+</details>
+<details>
+<summary>Files ignored due to path filters (${ignoredFilesCount})</summary>
+${ignoredFilesDetails.map(file => `- ${file}`).join('\n')}
+</details>
+<details>
+<summary>Files selected for processing (${selectedFilesCount})</summary>
+${selectedFilesDetails.map(file => `- ${file}`).join('\n')}
+</details>
+<details>
+<summary>Additional comments not posted (${additionalCommentsCount})</summary>
+${additionalCommentsDetails.map(file => `- ${file}`).join('\n')}
+</details>
+</details>
+`;
+
     try {
       await octokit.rest.pulls.createReview({
         ...repo,
         pull_number: pullRequest.number,
         commit_id: pullRequest.head.sha,
-        body: 'Code review comments',
+        body: summaryTemplate,
         event: 'COMMENT',
         comments: reviewComments,
         headers: {
@@ -212,6 +251,8 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
       console.error('Error posting code review comments:', error);
       throw error;
     }
+  } else if (looksGoodToMeCount > 0) {
+    console.log('Review result is "Looks Good To Me". No comments to post.');
   } else {
     console.log('No review comments to post.');
   }
