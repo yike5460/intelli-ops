@@ -205,8 +205,9 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
       ignoredFilesDetails.push(`${file.filename} is excluded by exclude rules`);
     }
   }
-
-  if (reviewComments.length > 0) {
+  
+  // we always post the summary even if there is no review comments, so that we can let the user know the review level and the number of files processed
+  if (reviewComments.length > 0 || looksGoodToMeCount > 0) {
     let summaryTemplate = `
 {{CODE_REVIEW_HEADER}}
 
@@ -243,6 +244,7 @@ ${additionalCommentsDetails.map(file => `- ${file}`).join('\n')}
         commit_id: pullRequest.head.sha,
         body: summaryTemplate,
         event: 'COMMENT',
+        // The review comment here will be empty if all the review comments are skipped due to "Looks Good To Me"
         comments: reviewComments,
         headers: {
           'X-GitHub-Api-Version': '2022-11-28'
@@ -253,8 +255,6 @@ ${additionalCommentsDetails.map(file => `- ${file}`).join('\n')}
       console.error('Error posting code review comments:', error);
       throw error;
     }
-  } else if (looksGoodToMeCount > 0) {
-    console.log('Review result is "Looks Good To Me". No comments to post.');
   } else {
     console.log('No review comments to post.');
   }

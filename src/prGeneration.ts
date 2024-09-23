@@ -114,7 +114,7 @@ export async function generatePRDescription(client: BedrockRuntimeClient, modelI
     const fixedDescription =
     `
 
-  ## File Stats Summary
+## File Stats Summary
   
   File number involved in this PR: *{{FILE_NUMBER}}*, unfold to see the details:
   
