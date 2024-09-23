@@ -128,7 +128,6 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
   });
 
   let reviewComments: { path: string; position: number; body: string }[] = [];
-  let looksGoodToMeCount = 0;
   let ignoredFilesCount = 0;
   let selectedFilesCount = 0;
   let additionalCommentsCount = 0;
@@ -181,9 +180,9 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
           continue;
         }
 
-        if (review.trim() === 'Looks Good To Me') {
-          looksGoodToMeCount++;
-          additionalCommentsDetails.push(`Skip posting review for hunk ${hunkIndex} in file ${file.filename} due to "Looks Good To Me"`);
+        if (review.includes('Looks Good To Me')) {
+          additionalCommentsCount++;
+          additionalCommentsDetails.push(`${file.filename} (hunk index: ${hunkIndex}): ${review}`);
           continue;
         }
 
@@ -207,7 +206,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
   }
   
   // we always post the summary even if there is no review comments, so that we can let the user know the review level and the number of files processed
-  if (reviewComments.length > 0 || looksGoodToMeCount > 0) {
+  if (reviewComments.length > 0 || additionalCommentsCount > 0) {
     let summaryTemplate = `
 {{CODE_REVIEW_HEADER}}
 
@@ -216,7 +215,8 @@ Actionable comments posted: ${reviewComments.length}
 <summary>Review Details</summary>
 <details>
 <summary>Review option chosen</summary>
-${reviewLevel}
+**Configuration used: GitHub Actions**
+**Code review level: ${reviewLevel}**
 </details>
 <details>
 <summary>Commits</summary>
@@ -224,14 +224,17 @@ Files that changed from the base of the PR and between ${pullRequest.base.sha} t
 </details>
 <details>
 <summary>Files ignored due to path filters (${ignoredFilesCount})</summary>
+
 ${ignoredFilesDetails.map(file => `- ${file}`).join('\n')}
 </details>
 <details>
 <summary>Files selected for processing (${selectedFilesCount})</summary>
+
 ${selectedFilesDetails.map(file => `- ${file}`).join('\n')}
 </details>
 <details>
 <summary>Additional comments not posted (${additionalCommentsCount})</summary>
+
 ${additionalCommentsDetails.map(file => `- ${file}`).join('\n')}
 </details>
 </details>
