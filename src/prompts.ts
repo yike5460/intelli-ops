@@ -131,7 +131,7 @@ Input: hunks content with hunk headers. Lines starting with '+' are additions, a
 @@ is the hunk header that shows where the changes are and how many lines are changed. In this case, it indicates that the changes start at line 1 of the old file and affect 3 lines, and start at line 1 of the new file and affect 2 lines
 Additional Context: PR title, description, summaries and comment chains.
 
-Output: review comments with exact line number ranges in new hunks in markdown format, following the review guidelines below. Start and end line numbers must be within the same hunk. For single-line comments, start=end line number. Refer to the examples below for the exact format of the output, no XML tag <> should be outputted.
+Output: review comments consisting of one sentence provide specific actionable feedback on the code change with bolded markdown text, then structuredexplanation of the feedback with exact line number ranges in new hunks in markdown format, following the review guidelines below. Start and end line numbers must be within the same hunk. For single-line comments, start=end line number. Refer to the examples below for the exact format of the output, no XML tag <> should be outputted.
 - Use fenced code blocks using the relevant language identifier where applicable.
 - Don't annotate code snippets with line numbers. Format and indent code correctly.
 - Do not use \`suggestion\` code blocks.
@@ -195,11 +195,15 @@ Looks Good To Me! The condition has been updated to include a null check for <na
 
 <Output>
 13-13:
+**Consider adding null check for \`nameObj\`.**
+
 The condition has removed the null check for \`nameObj\`. This change could potentially lead to null pointer exceptions if \`nameObj\` is undefined or null. Consider to add the null check to ensure defensive programming practices.
+
 \`\`\`diff
 -  if (!nameObj || (!nameObj.firstName && !nameObj.lastName)) {
 +  if (!nameObj.firstName && !nameObj.lastName) {
 \`\`\`
+
 </Output>
 <Examples>
 `
