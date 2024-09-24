@@ -5,6 +5,7 @@ export type LanguageCode = 'en' | 'zh' | 'ja' | 'es' | 'fr' | 'de' | 'it';
 
 // Full definition of PullRequest from GitHub API can be found at https://gist.github.com/GuillaumeFalourd/e53ec9b6bc783cce184bd1eec263799d
 export interface PullRequest {
+  title: string;
   number: number;
   body: string;
   head: {

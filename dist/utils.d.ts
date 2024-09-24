@@ -1,6 +1,7 @@
 import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
 export type LanguageCode = 'en' | 'zh' | 'ja' | 'es' | 'fr' | 'de' | 'it';
 export interface PullRequest {
+    title: string;
     number: number;
     body: string;
     head: {

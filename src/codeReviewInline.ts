@@ -2,119 +2,9 @@ import * as core from '@actions/core';
 import { getOctokit, context } from '@actions/github';
 import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
 import { invokeModel, PullRequest, PullFile, shouldExcludeFile, languageCodeToName, LanguageCode } from '@/src/utils';
+import { Inputs, Prompts} from '@/src/prompts';
 
 const CODE_REVIEW_HEADER = "🔍 AI Code Review (Powered by Amazon Bedrock)";
-
-interface ReviewComment {
-    path: string;
-    body: string;
-    position?: number;
-}
-
-// Refer to https://google.github.io/eng-practices/review/reviewer/looking-for.html and https://google.github.io/eng-practices/review/reviewer/standard.html
-const detailed_review_prompt = 
-`<task_context>
-You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress. Your feedback should be constructive, educational, and focused on the most important issues.
-</task_context>
-
-<tone_context>
-Maintain a constructive and educational tone. Be thorough but not overly pedantic. Remember that the goal is continuous improvement, not perfection.
-</tone_context>
-
-<code_change>
-{{CODE_SNIPPET}}
-</code_change>
-
-<detailed_task_description>
-Review the provided code change, which is presented in diff format. Lines starting with '+' are additions, and lines starting with '-' are removals. Consider the following aspects:
-1. Design: Evaluate the overall design and how it integrates with the existing system.
-2. Functionality: Assess if the code does what it's intended to do and if it's good for the users.
-3. Complexity: Check if the code is more complex than necessary.
-4. Tests: Verify the presence and quality of unit, integration, or end-to-end tests.
-5. Naming: Ensure clear and appropriate naming for variables, functions, and classes.
-6. Comments: Check for clear and useful comments that explain why, not what.
-7. Style: Verify adherence to the project's style guide.
-8. Documentation: Check if necessary documentation is updated or added.
-9. Potential issues: Look for possible concurrency problems, edge cases, or error handling issues.
-10. Code health: Assess if the change improves the overall code health of the system.
-
-Provide feedback on these aspects, categorizing your comments as follows:
-- Critical: Issues that must be addressed before approval.
-- Improvement: Suggestions that would significantly improve the code but aren't blocking.
-- Suggestion: Minor stylistic or preferential changes, prefixed with "Suggestion:".
-</detailed_task_description>
-
-<rules>
-1. Focus on the most important issues that affect code health and functionality.
-2. Balance the need for improvement with the need to make progress.
-3. Be specific in your feedback, referencing line numbers when applicable.
-4. Explain the reasoning behind your suggestions, especially for design-related feedback.
-5. If suggesting an alternative approach, briefly explain its benefits.
-6. Acknowledge good practices and improvements in the code.
-7. If relevant, mention any educational points that could help the developer learn, prefixed with "Learning opportunity:".
-</rules>
-
-If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, Suggestions, please answer only "Looks Good To Me" directly. Otherwise provide your review in the following format. Limit the total response within 100 words, the output language should be {{LANGUAGE_NAME}}, and follow the output format below.
-
-Summary:
-Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below
-
-Critical Issues:
-List any critical issues that need to be addressed, mandatory to include if the summary is "Request changes"
-
-Improvements:
-List potential improvements, mandatory to include if the summary is "Approve with minor modifications"
-
-Suggestions:
-List any minor suggestions, optional to include
-`;
-
-const concise_review_prompt =
-`<task_context>
-You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress. Your feedback should be constructive, educational, and focused on the most important issues.
-</task_context>
-
-<tone_context>
-Maintain a constructive and educational tone. Be thorough but not overly pedantic. Remember that the goal is continuous improvement, not perfection.
-</tone_context>
-
-<code_change>
-{{CODE_SNIPPET}}
-</code_change>
-
-<detailed_task_description>
-Review the provided code change, which is presented in diff format. Lines starting with '+' are additions, and lines starting with '-' are removals. Consider the following aspects:
-1. Design: Evaluate the overall design and how it integrates with the existing system.
-2. Functionality: Assess if the code does what it's intended to do and if it's good for the users.
-3. Complexity: Check if the code is more complex than necessary.
-4. Tests: Verify the presence and quality of unit, integration, or end-to-end tests.
-5. Comments: Check for clear and useful comments that explain why, not what.
-6. Potential issues: Look for possible concurrency problems, edge cases, or error handling issues.
-
-Provide feedback on these aspects, categorizing your comments as follows:
-- Critical: Issues that must be addressed before approval.
-- Improvement: Suggestions that would significantly improve the code but aren't blocking.
-</detailed_task_description>
-
-<rules>
-1. Focus on the most important issues that affect code health and functionality.
-2. Balance the need for improvement with the need to make progress.
-3. Be specific in your feedback, referencing line numbers when applicable.
-4. Explain the reasoning behind your suggestions, especially for design-related feedback.
-5. If suggesting an alternative approach, briefly explain its benefits.
-</rules>
-
-If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, please answer only "Looks Good To Me" directly. Otherwise provide your review in the following format. Limit the total response within 50 words. The output language should be {{LANGUAGE_NAME}}, and follow the output format below.
-
-Summary:
-Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below
-
-Critical Issues:
-List any critical issues that need to be addressed, mandatory to include if the summary is "Request changes"
-
-Improvements:
-List potential improvements, mandatory to include if the summary is "Approve with minor modifications"
-`;
 
 export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, excludePatterns: string[], reviewLevel: string, outputLanguage: string): Promise<void> {
 
@@ -134,6 +24,9 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
   let ignoredFilesDetails: string[] = [];
   let selectedFilesDetails: string[] = [];
   let additionalCommentsDetails: string[] = [];
+
+  const inputs: Inputs = new Inputs()
+  const prompts: Prompts = new Prompts()
 
   for (const file of files as PullFile[]) {
     // The sample contents of file.patch, which contains a unified diff representation of the changes made to a file in a pull request:
@@ -157,22 +50,31 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
       selectedFilesDetails.push(`${file.filename} (${hunks.length - 1} hunks)`);
 
       let totalPosition = 0;
-      console.log(`======================= Debugging Hunks of file: ${file.filename} ========================\n ${hunks}\n ================================================`);
       for (const [hunkIndex, hunk] of hunks.entries()) {
         if (hunkIndex === 0) continue; // Skip the first element (it's empty due to the split)
         const hunkLines = hunk.split('\n').slice(1); // Remove the hunk header
-
-        const diffContent = hunkLines.join('\n');
-        console.log(`======================= Debugging Diff content ========================\n ${diffContent}\n ================================================`);
-        const promptTemplate = reviewLevel === 'detailed' ? detailed_review_prompt : concise_review_prompt;
-        let formattedContent = promptTemplate.replace('{{CODE_SNIPPET}}', diffContent);
-
+        const hunkContent = hunkLines.join('\n');
         const languageName = languageCodeToName[outputLanguage as LanguageCode] || 'English';
         if (!(outputLanguage in languageCodeToName)) {
           core.warning(`Unsupported output language: ${outputLanguage}. Defaulting to English.`);
         }
-        formattedContent = formattedContent.replace('{{LANGUAGE_NAME}}', languageName);
 
+        // Assemble the inputs for the prompt
+        inputs.title = pullRequest.title;
+        inputs.description = pullRequest.body;
+        // inputs.rawSummary = pullRequest.body;
+        // inputs.shortSummary = pullRequest.body;
+        inputs.filename = file.filename;
+        // inputs.fileContent = file.patch;
+        // inputs.fileDiff = file.patch;
+        inputs.hunkContent = hunkContent;
+        // inputs.patches = file.patch;
+        // inputs.diff = file.patch;
+        // inputs.commentChain = file.patch;
+        // inputs.comment = file.patch;
+        inputs.languageName = languageName;
+
+        var formattedContent = reviewLevel === 'detailed' ? prompts.renderDetailedReviewPrompt(inputs) : prompts.renderConciseReviewPrompt(inputs);
         var review = await invokeModel(bedrockClient, modelId, formattedContent);  
 
         if (!review || review.trim() == '') {
@@ -215,8 +117,9 @@ Actionable comments posted: ${reviewComments.length}
 <summary>Review Details</summary>
 <details>
 <summary>Review option chosen</summary>
-**Configuration used: GitHub Actions**
-**Code review level: ${reviewLevel}**
+
+- **Configuration used: GitHub Actions**
+- **Code review level: ${reviewLevel}**
 </details>
 <details>
 <summary>Commits</summary>
