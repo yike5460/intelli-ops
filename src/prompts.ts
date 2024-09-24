@@ -136,7 +136,7 @@ Output: review comments consisting of one sentence provide specific actionable f
 - Don't annotate code snippets with line numbers. Format and indent code correctly.
 - Do not use \`suggestion\` code blocks.
 - For fixes, use \`diff\` code blocks, marking changes with \`+\` or \`-\`. The line number range for comments with fix snippets must exactly match the range to replace in the new hunk.
-- If there are no issues found or simple enough on a line range, you MUST respond with the text \`Looks Good To Me!\` for that line range in the review section.
+- If there are no issues found or simple enough on a line range, you MUST respond with the text \`Looks Good To Me!\` for that line range in the review section only, no more output otherwise.
 - Limit the total response within 100 words, the output language should be {{language_name}}.
 </Input and Output>
 
