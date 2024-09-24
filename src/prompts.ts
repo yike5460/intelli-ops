@@ -67,6 +67,18 @@ export class Inputs {
         if (!content) {
             return ''
         }
+        if (this.title) {
+            content = content.replace('{{title}}', this.title)
+        }
+        if (this.description) {
+            content = content.replace('{{description}}', this.description)
+        }
+        if (this.filename) {
+          content = content.replace('{{filename}}', this.filename)
+        }
+        if (this.shortSummary) {
+            content = content.replace('{{short_summary}}', this.shortSummary)
+        }
         if (this.hunkContent) {
             content = content.replace('{{hunk_content}}', this.hunkContent)
         }
@@ -83,60 +95,90 @@ export class Prompts {
 
     // Refer to https://google.github.io/eng-practices/review/reviewer/looking-for.html and https://google.github.io/eng-practices/review/reviewer/standard.html
     detailedReviewPrompt = 
-`<task_context>
+`<Task Context>
 You are an expert code reviewer tasked with reviewing a code change (CL) for a software project. Your primary goal is to ensure that the overall code health of the system is improving while allowing developers to make progress. Your feedback should be constructive, educational, and focused on the most important issues.
-</task_context>
+</Task Context>
 
-<tone_context>
+<Tone Context>
 Maintain a constructive and educational tone. Be thorough but not overly pedantic. Remember that the goal is continuous improvement, not perfection.
-</tone_context>
+</Tone Context>
 
-<code_change>
+<GitHub PR context>
+GitHub PR Title:
+{{title}}
+
+GitHub PR Description:
+{{description}}
+
+File name:
+{{filename}}
+
+Summary of changes:
+{{short_summary}}
+
+Hunk content:
 {{hunk_content}}
-</code_change>
+</GitHub PR context>
 
-<detailed_task_description>
-Review the provided code change, which is presented in diff format. Lines starting with '+' are additions, and lines starting with '-' are removals. Consider the following aspects:
-1. Design: Evaluate the overall design and how it integrates with the existing system.
-2. Functionality: Assess if the code does what it's intended to do and if it's good for the users.
-3. Complexity: Check if the code is more complex than necessary.
-4. Tests: Verify the presence and quality of unit, integration, or end-to-end tests.
-5. Naming: Ensure clear and appropriate naming for variables, functions, and classes.
-6. Comments: Check for clear and useful comments that explain why, not what.
-7. Style: Verify adherence to the project's style guide.
-8. Documentation: Check if necessary documentation is updated or added.
-9. Potential issues: Look for possible concurrency problems, edge cases, or error handling issues.
-10. Code health: Assess if the change improves the overall code health of the system.
+<Detailed Task Description>
+Input: Hunks content with hunk headers. Lines starting with '+' are additions, and lines starting with '-' are removals. Hunks represent incomplete code fragments with sample content shown below.
+@@ -1,3 +1,2 @@
+-This is the original line 1.
+-This is the original line 2.
++This is the new line 1.
++ This is an unchanged line.
+@@ is the hunk header that shows where the changes are and how many lines are changed. In this case, it indicates that the changes start at line 1 of the old file and affect 3 lines, and start at line 1 of the new file and affect 2 lines
 
-Provide feedback on these aspects, categorizing your comments as follows:
-- Critical: Issues that must be addressed before approval.
-- Improvement: Suggestions that would significantly improve the code but aren't blocking.
-- Suggestion: Minor stylistic or preferential changes, prefixed with "Suggestion:".
-</detailed_task_description>
+Additional Context: PR title, description, summaries and comment chains.
+Task: Review new hunks for substantive issues using provided context and respond with comments if necessary.
+Output: Review comments in markdown with exact line number ranges in new hunks. Start and end line numbers must be within the same hunk. For single-line comments, start=end line number. Must use example response format below.
+Use fenced code blocks using the relevant language identifier where applicable.
+Don't annotate code snippets with line numbers. Format and indent code correctly.
+Do not use \`suggestion\` code blocks.
+For fixes, use \`diff\` code blocks, marking changes with \`+\` or \`-\`. The line number range for comments with fix snippets must exactly match the range to replace in the new hunk.
 
-<rules>
-1. Focus on the most important issues that affect code health and functionality.
-2. Balance the need for improvement with the need to make progress.
-3. Be specific in your feedback, referencing line numbers when applicable.
-4. Explain the reasoning behind your suggestions, especially for design-related feedback.
-5. If suggesting an alternative approach, briefly explain its benefits.
-6. Acknowledge good practices and improvements in the code.
-7. If relevant, mention any educational points that could help the developer learn, prefixed with "Learning opportunity:".
-</rules>
+- Do NOT provide general feedback, summaries, explanations of changes, or praises for making good additions. 
+- Focus solely on offering specific, objective insights based on the given context and refrain from making broad comments about potential impacts on the system or question intentions behind the changes.
+- Focus on the most important issues that affect code health and functionality.
+- Balance the need for improvement with the need to make progress.
+- Be specific in your feedback, referencing line numbers when applicable.
+- Explain the reasoning behind your suggestions, especially for design-related feedback.
+- If suggesting an alternative approach, briefly explain its benefits.
+- Acknowledge good practices and improvements in the code.
 
-If changed code is good or simple enough to skip or not fitting in categories: Critical, Improvements, Suggestions, please answer only "Looks Good To Me" directly. Otherwise provide your review in the following format. Limit the total response within 100 words, the output language should be {{language_name}}, and follow the output format below.
+If there are no issues found or simple enough on a line range, you MUST respond with the text \`Looks Good To Me!\` for that line range in the review section. Limit the total response within 100 words, the output language should be {{language_name}}
+</Detailed Task Description>
 
-Summary:
-Conclude the review with one of the following statements: "Approve", "Approve with minor modifications", or "Request changes", in ONLY one of the categories below
+<Example>
+<Example Changes>
+--- example.js
++++ example.js
+@@ -7,9 +7,13 @@ const _ = require("underscore");
+  */
 
-Critical Issues:
-List any critical issues that need to be addressed, mandatory to include if the summary is "Request changes"
+function exampleCall({ nameObj } = {}) {
+-  const retObj = { ..._.omit(nameObj, "firstName", "lastName"), firstName: nameObj.firstName, lastName: nameObj.lastName };
++  const retObj = {
++    ..._.omit(nameObj, "firstName", "lastName"),
++    firstName: nameObj.firstName,
++    lastName: nameObj.lastName
++  };
 
-Improvements:
-List potential improvements, mandatory to include if the summary is "Approve with minor modifications"
+-  if (!nameObj.firstName && !nameObj.lastName) {
++  if (!nameObj || (!nameObj.firstName && !nameObj.lastName)) {
+     retObj.anObjectHasNoName = true;
+   }
+</Example Changes>
 
-Suggestions:
-List any minor suggestions, optional to include
+<Example Response>
+7-13:
+Looks Good To Me! The code has been reformatted to improve readability. This change looks good and follows best practices for object formatting.
+
+---
+14-14:
+Looks Good To Me!The condition has been updated to include a null check for <nameObj>. This is a good defensive programming practice.
+</Example Response>
+<Example>
 `
     conciseReviewPrompt =
 `<task_context>

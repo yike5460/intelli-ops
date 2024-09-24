@@ -107,7 +107,6 @@ export async function exponentialBackoff<T>(
   let retries = 0;
   while (true) {
     try {
-      console.log(`Attempt ${retries + 1} of ${maxRetries + 1}`);
       const result = await fn();
       console.log(`Function executed successfully on attempt ${retries + 1}`);
       return result;

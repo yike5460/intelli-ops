@@ -29,35 +29,53 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
   const prompts: Prompts = new Prompts()
 
   for (const file of files as PullFile[]) {
-    // The sample contents of file.patch, which contains a unified diff representation of the changes made to a file in a pull request:
+    // The sample contents of file.patch, which contains a unified diff representation of the changes made to a file in a pull request, with multiple hunks in the file
     // diff --git a/file1.txt b/file1.txt
     // index 7cfc5c8..e69de29 100644
     // --- a/file1.txt
     // +++ b/file1.txt
+
     // @@ -1,3 +1,2 @@
     // -This is the original line 1.
     // -This is the original line 2.
     // +This is the new line 1.
     //  This is an unchanged line.
+    // @@ -10,3 +10,2 @@
+    // -This is the original line 10.
+    // -This is the original line 11.
+    // +This is the new line 10.
+    //  This is an unchanged line.
+
     // @@ is the hunk header that shows where the changes are and how many lines are changed. In this case, it indicates that the changes start at line 1 of the old file and affect 3 lines, and start at line 1 of the new file and affect 2 lines.
 
     // console.log(`File patch content: ${file.patch} for file: ${file.filename}`);
     if (file.status !== 'removed' && file.patch && !shouldExcludeFile(file.filename, excludePatterns)) {
       selectedFilesCount++;
 
-      // Split the patch into hunks
-      const hunks = file.patch.split(/^@@\s+-\d+,\d+\s+\+\d+,\d+\s+@@/m);
-      selectedFilesDetails.push(`${file.filename} (${hunks.length - 1} hunks)`);
+      // Split the patch into hunks, but keep the hunk headers
+      const hunks = file.patch.split(/(?=^@@\s+-\d+,\d+\s+\+\d+,\d+\s+@@)/m);
+      console.log(`=========================================== File patch for ${file.filename} ===========================================`);
+      console.log(`Hunks: ${hunks}`);
+      console.log(`=========================================== File patch for ${file.filename} ===========================================`);
+      selectedFilesDetails.push(`${file.filename} (${hunks.length} hunks)`);
 
       let totalPosition = 0;
       for (const [hunkIndex, hunk] of hunks.entries()) {
-        if (hunkIndex === 0) continue; // Skip the first element (it's empty due to the split)
-        const hunkLines = hunk.split('\n').slice(1); // Remove the hunk header
+        // hunkLines and hunkContent indeed contain the same information, just in different formats:
+        // hunkLines is an array of strings, where each string represents a line of the hunk.
+        // hunkContent is a single string, which is the result of joining all the lines in hunkLines with newline characters.
+        const hunkLines = hunk.split('\n')
         const hunkContent = hunkLines.join('\n');
         const languageName = languageCodeToName[outputLanguage as LanguageCode] || 'English';
         if (!(outputLanguage in languageCodeToName)) {
           core.warning(`Unsupported output language: ${outputLanguage}. Defaulting to English.`);
         }
+
+        console.log(`=========================================== Hunk ${hunkIndex} of ${file.filename} ===========================================`);
+        console.log(`Hunk: ${hunk}`);
+        console.log(`Hunk lines: ${hunkLines}`);
+        console.log(`Hunk content: ${hunkContent}`);
+        console.log(`=========================================== Hunk ${hunkIndex} of ${file.filename} ===========================================`);
 
         // Assemble the inputs for the prompt
         inputs.title = pullRequest.title;
@@ -74,8 +92,8 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
         // inputs.comment = file.patch;
         inputs.languageName = languageName;
 
-        var formattedContent = reviewLevel === 'detailed' ? prompts.renderDetailedReviewPrompt(inputs) : prompts.renderConciseReviewPrompt(inputs);
-        var review = await invokeModel(bedrockClient, modelId, formattedContent);  
+        var finalPromt = reviewLevel === 'detailed' ? prompts.renderDetailedReviewPrompt(inputs) : prompts.renderConciseReviewPrompt(inputs);
+        var review = await invokeModel(bedrockClient, modelId, finalPromt);  
 
         if (!review || review.trim() == '') {
           console.warn(`No review comments generated for hunk ${hunkIndex} in file ${file.filename}, skipping`);
