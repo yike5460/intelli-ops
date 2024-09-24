@@ -122,7 +122,7 @@ Hunk content:
 
 <Detailed Task Description>
 <Input and Output>
-Input: Hunks content with hunk headers. Lines starting with '+' are additions, and lines starting with '-' are removals. Hunks represent incomplete code fragments with sample content shown below.
+Input: hunks content with hunk headers. Lines starting with '+' are additions, and lines starting with '-' are removals. Hunks represent incomplete code fragments with sample content shown below.
 @@ -1,3 +1,2 @@
 - This is the original line 1.
 - This is the original line 2.
@@ -131,11 +131,11 @@ Input: Hunks content with hunk headers. Lines starting with '+' are additions, a
 @@ is the hunk header that shows where the changes are and how many lines are changed. In this case, it indicates that the changes start at line 1 of the old file and affect 3 lines, and start at line 1 of the new file and affect 2 lines
 Additional Context: PR title, description, summaries and comment chains.
 
-Output: Review comments in markdown with exact line number ranges in new hunks. Start and end line numbers must be within the same hunk. For single-line comments, start=end line number. Must use example response format below.
+Output: review comments in markdown with exact line number ranges in new hunks. Start and end line numbers must be within the same hunk. For single-line comments, start=end line number. Must use example response format below, no XML tag <> should be outputted.
 - Use fenced code blocks using the relevant language identifier where applicable.
 - Don't annotate code snippets with line numbers. Format and indent code correctly.
 - Do not use \`suggestion\` code blocks.
-- For fixes, use \`diff\` code blocks, marking changes with \`+\` or \`-\`. The line number range for comments with fix snippets must exactly match the range to replace in the new hunk, no XML tag <> should be outputted.
+- For fixes, use \`diff\` code blocks, marking changes with \`+\` or \`-\`. The line number range for comments with fix snippets must exactly match the range to replace in the new hunk.
 </Input and Output>
 
 <Review Guidelines>

@@ -103,7 +103,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
         if (review.includes('Looks Good To Me')) {
           additionalCommentsCount++;
           // add delimiter symbol "---" per file end to make the output more readable
-          additionalCommentsDetails.push(`${file.filename} (hunk index: ${hunkIndex}):\n${review}\n---\n`);
+          additionalCommentsDetails.push(`${file.filename} (hunk index: ${hunkIndex}):\n${review}\n\n---\n`);
           continue;
         }
 
