@@ -186,21 +186,17 @@ async function run(): Promise<void> {
       await generatePRDescription(bedrockClient, modelId, octokit);
     }
 
+    // branch to generate code review comments
+    if (generateCodeReview.toLowerCase() === 'true') {
+      await generateCodeReviewComment(bedrockClient, modelId, octokit, excludePatterns, reviewLevel, outputLanguage);
+    }
+
     // branch to generate unit tests suite
     if (generateUnitTest.toLowerCase() === 'true') {
       if (!unitTestSourceFolder) {
         throw new Error('Test folder path is not specified');
       }
       await generateUnitTestsSuite(bedrockClient, modelId, octokit, repo, unitTestSourceFolder);
-    }
-
-    // branch to generate code review comments
-    if (generateCodeReview.toLowerCase() === 'true') {
-      // Wait for a fixed amount of time (e.g., 5 seconds)
-      // const delayMs = 5000; // 5 seconds
-      // console.log(`Waiting ${delayMs}ms for GitHub to process the changes...`);
-      // await new Promise(resolve => setTimeout(resolve, delayMs));
-      await generateCodeReviewComment(bedrockClient, modelId, octokit, excludePatterns, reviewLevel, outputLanguage);
     }
 
   } catch (error) {
