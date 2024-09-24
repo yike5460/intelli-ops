@@ -131,11 +131,12 @@ Input: hunks content with hunk headers. Lines starting with '+' are additions, a
 @@ is the hunk header that shows where the changes are and how many lines are changed. In this case, it indicates that the changes start at line 1 of the old file and affect 3 lines, and start at line 1 of the new file and affect 2 lines
 Additional Context: PR title, description, summaries and comment chains.
 
-Output: review comments in markdown with exact line number ranges in new hunks. Start and end line numbers must be within the same hunk. For single-line comments, start=end line number. Must use example response format below, no XML tag <> should be outputted.
+Output: review comments with exact line number ranges in new hunks in markdown format, following the review guidelines below. Start and end line numbers must be within the same hunk. For single-line comments, start=end line number. Refer to the examples below for the exact format of the output, no XML tag <> should be outputted.
 - Use fenced code blocks using the relevant language identifier where applicable.
 - Don't annotate code snippets with line numbers. Format and indent code correctly.
 - Do not use \`suggestion\` code blocks.
 - For fixes, use \`diff\` code blocks, marking changes with \`+\` or \`-\`. The line number range for comments with fix snippets must exactly match the range to replace in the new hunk.
+- If there are no issues found or simple enough on a line range, you MUST respond with the text \`Looks Good To Me!\` for that line range in the review section. Limit the total response within 100 words, the output language should be {{language_name}}.
 </Input and Output>
 
 <Review Guidelines>
@@ -148,11 +149,10 @@ Output: review comments in markdown with exact line number ranges in new hunks. 
 - If suggesting an alternative approach, briefly explain its benefits.
 - Acknowledge good practices and improvements in the code.
 </Review Guidelines>
-If there are no issues found or simple enough on a line range, you MUST respond with the text \`Looks Good To Me!\` for that line range in the review section. Limit the total response within 100 words, the output language should be {{language_name}}
 </Detailed Task Description>
 
 <Examples>
-<Example Changes>
+<Input>
 --- example.js
 +++ example.js
 @@ -7,9 +7,13 @@ const _ = require("underscore");
@@ -170,17 +170,17 @@ function exampleCall({ nameObj } = {}) {
 +  if (!nameObj || (!nameObj.firstName && !nameObj.lastName)) {
      retObj.anObjectHasNoName = true;
    }
-</Example Changes>
+</Input>
 
-<Example Response>
+<Output>
 7-13:
 Looks Good To Me! The code has been reformatted to improve readability. This change looks good and follows best practices for object formatting.
 
 14-14:
 Looks Good To Me! The condition has been updated to include a null check for <nameObj>. This is a good defensive programming practice.
-</Example Response>
+</Output>
 
-<Example Changes>
+<Input>
 --- another_example.js
 +++ another_example.js
 @@ -13,7 +13,7 @@ function exampleCall({ nameObj } = {}) {
@@ -191,16 +191,16 @@ Looks Good To Me! The condition has been updated to include a null check for <na
 +  if (!nameObj.firstName && !nameObj.lastName) {
      retObj.anObjectHasNoName = true;
    }
-</Example Changes>
+</Input>
 
-<Example Response>
+<Output>
 13-13:
 The condition has removed the null check for \`nameObj\`. This change could potentially lead to null pointer exceptions if \`nameObj\` is undefined or null. Consider to add the null check to ensure defensive programming practices.
 \`\`\`diff
 -  if (!nameObj || (!nameObj.firstName && !nameObj.lastName)) {
 +  if (!nameObj.firstName && !nameObj.lastName) {
 \`\`\`
-</Example Response>
+</Output>
 <Examples>
 `
     conciseReviewPrompt =
