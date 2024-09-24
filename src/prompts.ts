@@ -131,13 +131,16 @@ Input: hunks content with hunk headers. Lines starting with '+' are additions, a
 @@ is the hunk header that shows where the changes are and how many lines are changed. In this case, it indicates that the changes start at line 1 of the old file and affect 3 lines, and start at line 1 of the new file and affect 2 lines
 Additional Context: PR title, description, summaries and comment chains.
 
-Output: review comments consisting of one sentence provide specific actionable feedback on the code change with bolded markdown text, then structuredexplanation of the feedback with exact line number ranges in new hunks in markdown format, following the review guidelines below. Start and end line numbers must be within the same hunk. For single-line comments, start=end line number. Refer to the examples below for the exact format of the output, XML tag, e.g. <Review Comments> must not be outputted.
+Output: Review the input following the <Review Guidelines>, and output the review comments in the following format:
+- The review comment consists of: one sentence provide specific actionable feedback on the code change with bolded markdown text, and explanation of the feedback with exact line number ranges in new hunks in markdown format. Start and end line numbers must be within the same hunk. For single-line comments, start=end line number.
 - Use fenced code blocks using the relevant language identifier where applicable.
 - Don't annotate code snippets with line numbers. Format and indent code correctly.
 - Do not use \`suggestion\` code blocks.
+- XML tag must not be outputted.
 - For fixes, use \`diff\` code blocks, marking changes with \`+\` or \`-\`. The line number range for comments with fix snippets must exactly match the range to replace in the new hunk.
 - If there are no issues found or simple enough on a line range, you MUST respond with the text \`Looks Good To Me!\` for that line range in the review section only, no more output otherwise.
 - Limit the total response within 100 words, the output language should be {{language_name}}.
+- Refer to the <Examples> below for the exact format of the output.
 </Input and Output>
 
 <Review Guidelines>
@@ -196,8 +199,9 @@ Looks Good To Me! The condition has been updated to include a null check for <na
 
 <Output>
 13-13:
+\n
 **Consider adding null check for \`nameObj\`.**
-
+\n
 The condition has removed the null check for \`nameObj\`. This change could potentially lead to null pointer exceptions if \`nameObj\` is undefined or null. Consider to add the null check to ensure defensive programming practices.
 
 \`\`\`diff

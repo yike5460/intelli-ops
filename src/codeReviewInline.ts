@@ -54,9 +54,9 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
 
       // Split the patch into hunks, but keep the hunk headers
       const hunks = file.patch.split(/(?=^@@\s+-\d+,\d+\s+\+\d+,\d+\s+@@)/m);
-      console.log(`=========================================== File patch for ${file.filename} ===========================================`);
-      console.log(`Hunks: ${hunks}`);
-      console.log(`=========================================== File patch for ${file.filename} ===========================================`);
+      // console.log(`=========================================== File patch for ${file.filename} ===========================================`);
+      // console.log(`Hunks: ${hunks}`);
+      // console.log(`=========================================== File patch for ${file.filename} ===========================================`);
       selectedFilesDetails.push(`${file.filename} (${hunks.length} hunks)`);
 
       let totalPosition = 0;
@@ -71,11 +71,11 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
           core.warning(`Unsupported output language: ${outputLanguage}. Defaulting to English.`);
         }
 
-        console.log(`=========================================== Hunk ${hunkIndex} of ${file.filename} ===========================================`);
-        console.log(`Hunk: ${hunk}`);
-        console.log(`Hunk lines: ${hunkLines}`);
-        console.log(`Hunk content: ${hunkContent}`);
-        console.log(`=========================================== Hunk ${hunkIndex} of ${file.filename} ===========================================`);
+        // console.log(`=========================================== Hunk ${hunkIndex} of ${file.filename} ===========================================`);
+        // console.log(`Hunk: ${hunk}`);
+        // console.log(`Hunk lines: ${hunkLines}`);
+        // console.log(`Hunk content: ${hunkContent}`);
+        // console.log(`=========================================== Hunk ${hunkIndex} of ${file.filename} ===========================================`);
 
         // Assemble the inputs for the prompt
         inputs.title = pullRequest.title;
@@ -99,6 +99,9 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
           console.warn(`No review comments generated for hunk ${hunkIndex} in file ${file.filename}, skipping`);
           continue;
         }
+
+        // TODO, this is a temporary workaround to clear the <Review Comments> </Review Comments> tag in the output if it exists
+        review = review.replace('<Review Comments>', '').replace('</Review Comments>', '');
 
         if (review.includes('Looks Good To Me')) {
           additionalCommentsCount++;
