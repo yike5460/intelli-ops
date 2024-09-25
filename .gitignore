@@ -20,3 +20,6 @@ build
 dist
 tmp.rm.later
 package-lock.json
+
+# Next.js, ignore the .next folder
+/web/.next
