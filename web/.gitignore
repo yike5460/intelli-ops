@@ -1,3 +1,4 @@
 node_modules
+# Remove Vite related entries
 dist
 .vercel
