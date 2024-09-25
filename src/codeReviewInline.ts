@@ -100,8 +100,8 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
           continue;
         }
 
-        // TODO, this is a temporary workaround to clear the <Review Comments> </Review Comments> tag in the output if it exists
-        review = review.replace('<Review Comments>', '').replace('</Review Comments>', '');
+        // TODO, this is a temporary workaround to remove all the xml tag with content "review comments" in the output if it exists, e.g. <Review Comments>, <review Comments>, <review comment>, <Review comment> and </Review Comments>, </review Comments>, </review comment>, </Review comment>
+        review = review.replace(/<Review Comments>|<\/Review Comments>|<review Comments>|<\/review Comments>|<review comment>|<\/review comment>|<Review comment>|<\/Review comment>/g, '').trim();
 
         if (review.includes('Looks Good To Me')) {
           additionalCommentsCount++;

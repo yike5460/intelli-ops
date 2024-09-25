@@ -33,7 +33,7 @@ Next.js applications can be easily deployed to various platforms with built-in s
 
 ## How to migrate
 
-There are full diff files below for your reference which contains the changes between the ViteJS and NextJS:
+There are full diff files below for your reference which contains the changes between the ViteJS and NextJS, you can check the details in this [PR](https://github.com/yike5460/intelli-ops/pull/31)
 
 ```
 Changes not staged for commit:
@@ -70,3 +70,6 @@ Untracked files:
         web/tailwind.config.js
         web/tsconfig.json
 ```
+
+Note the configuration in Vercel hosting platform also needed to be updated in "Settings" -> "Build & Development Settings" -> "Environment Variables"
+
