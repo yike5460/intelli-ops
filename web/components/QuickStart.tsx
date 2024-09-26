@@ -118,7 +118,7 @@ Outputs:
             <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">2. Setting up the GitHub Actions</h3>
             <p className="mb-4 text-gray-600">
               Here's a complete workflow sample that includes configuring AWS credentials and using the Intelli-Ops GitHub Action. 
-              Make sure to replace the `role-to-assume` ARN with your actual IAM role ARN created in step 1, and adjust other parameters as needed:
+              Go to your repo -> Settings -> Secrets and variables -> Actions -> New repository secret, then add the secret name as e.g. AWS_ROLE_TO_ASSUME, and the value as the role arn, e.g. arn:aws:iam::123456789012:role/role-name created in the previous step, then reference it in the workflow as \${{ secrets.AWS_ROLE_TO_ASSUME }}
             </p>
             <FoldableCommand title="Complete Workflow Sample" command={`name: Intelligent Code Review
 on:
@@ -168,7 +168,7 @@ jobs:
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::123456789012:role/role-name
+        role-to-assume: \${{ secrets.AWS_ROLE_TO_ASSUME }}
         aws-region: us-east-1
 
     - name: Intelligent GitHub Actions

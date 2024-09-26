@@ -274,7 +274,8 @@ jobs:
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::123456789012:role/role-name
+        # Go to your repo -> Settings -> Secrets and variables -> Actions -> New repository secret, then add the secret name as e.g. AWS_ROLE_TO_ASSUME, and the value as the role arn, e.g. arn:aws:iam::123456789012:role/role-name, then reference it in the workflow as ${{ secrets.AWS_ROLE_TO_ASSUME }}
+        role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
         aws-region: us-east-1
 
     - name: Intelligent GitHub Actions
