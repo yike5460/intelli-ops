@@ -123,7 +123,8 @@ export async function exponentialBackoff<T>(
   }
 }
 
-export async function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string): Promise<string> {
+// note the default temperature is 1 according to official documentation: https://docs.anthropic.com/en/api/complete
+export async function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string, temperature: number = 0.6): Promise<string> {
     const maxRetries = 3;
     const initialDelay = 1000; // 1 second
 
@@ -161,6 +162,7 @@ export async function invokeModel(client: BedrockRuntimeClient, modelId: string,
         const payload = {
           anthropic_version: "bedrock-2023-05-31",
           max_tokens: 4096,
+          temperature: temperature,
           messages: [
             {
               role: "user",

@@ -23,4 +23,4 @@ export declare function shouldExcludeFile(filename: string, excludePatterns: str
 export declare function splitIntoSoloFile(combinedCode: string): Record<string, string>;
 export declare function extractFunctions(content: string): Promise<string[]>;
 export declare function exponentialBackoff<T>(fn: () => Promise<T>, maxRetries: number, initialDelay: number): Promise<T>;
-export declare function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string): Promise<string>;
+export declare function invokeModel(client: BedrockRuntimeClient, modelId: string, payloadInput: string, temperature?: number): Promise<string>;
