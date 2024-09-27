@@ -82,7 +82,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
         inputs.description = pullRequest.body;
         // inputs.rawSummary = pullRequest.body;
         // inputs.shortSummary = pullRequest.body;
-        inputs.filename = file.filename;
+        inputs.fileName = file.filename;
         // inputs.fileContent = file.patch;
         // inputs.fileDiff = file.patch;
         inputs.hunkContent = hunkContent;

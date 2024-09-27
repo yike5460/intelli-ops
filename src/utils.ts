@@ -99,24 +99,26 @@ export async function extractFunctions(content: string): Promise<string[]> {
     'function generateTestReport(testCases: TestCase[]): Promise<void> { ... }',
   ];
 }
+
 export async function exponentialBackoff<T>(
   fn: () => Promise<T>,
   maxRetries: number,
-  initialDelay: number
+  initialDelay: number,
+  functionName: string
 ): Promise<T> {
   let retries = 0;
   while (true) {
     try {
       const result = await fn();
-      console.log(`Function executed successfully on attempt ${retries + 1}`);
+      console.log(`Function '${functionName}' executed successfully on attempt ${retries + 1}`);
       return result;
     } catch (error) {
       if (retries >= maxRetries) {
-        console.error(`Max retries (${maxRetries}) reached. Throwing error.`);
+        console.error(`Max retries (${maxRetries}) reached for function '${functionName}'. Throwing error.`);
         throw error;
       }
       const delay = initialDelay * Math.pow(2, retries);
-      console.log(`Attempt ${retries + 1} failed. Retrying in ${delay}ms...`);
+      console.log(`Attempt ${retries + 1} for function '${functionName}' failed. Retrying in ${delay}ms...`);
       await new Promise(resolve => setTimeout(resolve, delay));
       retries++;
     }
@@ -194,5 +196,5 @@ export async function invokeModel(client: BedrockRuntimeClient, modelId: string,
       }
     };
 
-    return exponentialBackoff(invokeWithRetry, maxRetries, initialDelay);
+    return exponentialBackoff(invokeWithRetry, maxRetries, initialDelay, invokeModel.name);
   }

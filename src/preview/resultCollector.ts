@@ -5,7 +5,6 @@ export interface ITestInfo {
     testName: string;
     testSource: string;
     prompt: Prompts;
-    completion: string;
 }
 
 export interface IPromptInfo {

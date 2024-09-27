@@ -14,7 +14,8 @@ export class LanguageModel implements ICompletionModel {
     async getCompletions(prompt: string, temperature: number): Promise<string[]> {
         try {
             const completion = await invokeModel(this.client, this.modelId, prompt, temperature);
-            return [completion]; // Wrap the single completion in an array to match the interface
+            // return the array of completions, only one completion for now
+            return [completion];
         } catch (error) {
             console.error("Error getting completions:", error);
             return [];

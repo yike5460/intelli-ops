@@ -21,19 +21,26 @@ export class TestGenerator {
         private collector: ITestResultCollector
     ) {}
 
-    async generateAndValidateTests(fileContent: string, snippets: string[]): Promise<void> {
-        console.log('Generating and validating tests with fileContent:\n', fileContent, '\nand snippets:\n', snippets);
+    async generateAndValidateTests(fileMeta: {
+        fileName: string,
+        filePath: string,
+        fileContent: string,
+        rootDir: string
+    }, snippets: string[]): Promise<void> {
         const inputs: Inputs = new Inputs()
-        inputs.fileContent = fileContent
+        inputs.fileName = fileMeta.fileName
+        inputs.fileContent = fileMeta.fileContent
+        inputs.filePath = fileMeta.filePath
 
-        const functions = this.extractFunctions(fileContent);
+        const functions = this.extractFunctions(fileMeta.fileContent);
         for (const func of functions) {
             const initialPrompt: Prompts = new Prompts()
             inputs.functionBody = func
 
             for (const temperature of this.temperatures) {
                 let generatedPassingTests = false;
-                this.worklist = [initialPrompt];
+                // Push initial prompt to worklist
+                this.worklist.push(initialPrompt);
                 let attempts = 0;
                 const maxAttempts = 5; // Limit the number of attempts per temperature
 
@@ -43,64 +50,88 @@ export class TestGenerator {
                     if (this.collector.hasPrompt(prompt)) {
                         continue;
                     }
-                    const completions = await this.model.getCompletions(prompt.renderUnitTestGenerationPrompt(inputs), temperature)
+                    // if refinedPrompt is not empty means this prompt has been refined before, we don't need to render it again
+                    const promptString = prompt.refinedPrompt === '' ? prompt.renderUnitTestGenerationPrompt(inputs) : prompt.refinedPrompt
+                    const completions = await this.model.getCompletions(promptString, temperature)
+
+                    // record the prompt info to avoid duplicate processing for the same prompt
                     this.collector.recordPromptInfo(prompt, completions.length);
                     
                     // TODO: There is only one completion for now, try to refactor the getCompletions execute multiple times
-                    for (const completion of completions) {
-                        const testInfo = this.validateCompletion(prompt, completion);
+                    const completionArray = Array.isArray(completions) ? completions : [completions];
+                    for (const completion of completionArray) {
+                        const testInfo = this.validateCompletion(prompt, completion, fileMeta.rootDir);
                         if (testInfo.outcome.status === "PASSED") {
                             generatedPassingTests = true;
                             this.collector.recordTestResult(testInfo);
                             break;
                         } else if (testInfo.outcome.status === "FAILED") {
                             // Re-render the prompt with the error, simple promptRefiner implementation
-                            inputs.error = testInfo.outcome.error
-                            const refinedPrompt = new Prompts(prompt.renderUnitTestGenerationPrompt(inputs));
-                            console.log('Refined prompt: ', refinedPrompt, '\nIn attempt: ', attempts)
-                            if (!this.collector.hasPrompt(refinedPrompt)) {
-                                this.worklist.push(refinedPrompt);
-                            }
+                            inputs.generatedUnitTestCodeExecutionError = testInfo.outcome.error
+                            inputs.generatedUnitTestCode = testInfo.testSource
+                            const refinedPrompt: Prompts = new Prompts()
+                            refinedPrompt.refinedPrompt = prompt.renderUnitTestGenerationRefinedPrompt(inputs)
+                            this.worklist.push(refinedPrompt);
+                            console.log('Attempt: ', attempts, '\nRefined prompt: ', refinedPrompt.refinedPrompt)
                         }
                         this.collector.recordTestResult(testInfo);
                     }
-
                     if (generatedPassingTests) {
                         break;
                     }
-
                     attempts++;
                 }
-
                 if (generatedPassingTests) {
                     break;
                 }
             }
         }
-
         const coverageSummary = this.validator.getCoverageSummary();
         this.collector.recordCoverageInfo(coverageSummary);
     }
 
-    private validateCompletion(prompt: Prompts, completion: string): any {
-        const testSource = completion
+    private validateCompletion(prompt: Prompts, completion: string, rootDir: string): any {
+        const testSource = this.parseExecutableCode(completion)
         const testInfo = {
             testName: `test_${Date.now()}`,
             testSource,
             prompt,
-            completion
+            rootDir
         };
 
         this.collector.recordTestInfo(testInfo);
-
         if (completion.trim() === "") {
             return { ...testInfo, outcome: { status: "FAILED", error: "Empty completion" } };
         }
-        // console.log('Validating test: ', testInfo.testSource, '\nName: ', testInfo.testName)
-        const outcome = this.validator.validateTest(testInfo.testName, testInfo.testSource);
-        console.log('Outcome for the test: ', testInfo.testName, '\n', outcome)
-        return { ...testInfo, outcome };
+
+        const outcome = this.validator.validateTest(testInfo.testName, testInfo.testSource, rootDir);
+        console.log('Outcome for the testSource:\n', outcome, '\n\nTest source:\n', testInfo.testSource)
+        return { ...testInfo, outcome }
     }
+
+    private parseExecutableCode(completion: string): string {
+        /**
+         * Input will be in the format below according to the prompt in renderUnitTestGenerationPrompt:
+         * 
+         * ```typescript
+         * <Generated Unit Test Code>
+         * ```
+         * 
+         * Extract the executable code from the Input directly
+        **/
+        try {
+            const codeBlockRegex = /```(?:javascript|typescript)?\s*([\s\S]*?)```/g;
+            const match = codeBlockRegex.exec(completion);
+            if (match && match[1]) {
+                return match[1].trim();
+            }
+            throw new Error('No code block found in the completion');
+        } catch (error) {
+            console.log('Error parsing completion: ', error)
+            throw error;
+        }
+    }
+
     // TODO: Use a proper TypeScript parser like typescript-estree.
     private extractFunctions(fileContent: string): string[] {
         const functionRegex = /(?:export\s+)?(?:async\s+)?function\s+\w+\s*\([^)]*\)\s*(?::\s*\w+)?\s*{[^}]*}/g;
@@ -135,17 +166,23 @@ export async function generateUnitTestsSuite(
             });
             if (Array.isArray(files)) {
                 for (const file of files) {
-                    console.log('Debugging file:', file);
+                    // console.log('Debugging file:', file);
                     if (file.type === 'file' && file.name.endsWith('.ts')) {
                         const { data: content } = await octokit.rest.repos.getContent({
                             ...repo,
                             path: file.path,
                         });
-                        console.log('Debugging file content:', content);
+                        // console.log('Debugging file content:', content);
                         if ('content' in content && typeof content.content === 'string') {
                             const decodedContent = Buffer.from(content.content, 'base64').toString('utf8');
-                            console.log('Debugging decoded content:', decodedContent);
-                            const testCases = await generateTestCasesForFile(client, modelId, decodedContent);
+                            // console.log('Debugging decoded content:', decodedContent);
+                            const fileMeta = {
+                                fileName: file.name,
+                                filePath: file.path,
+                                fileContent: decodedContent,
+                                rootDir: unitTestSourceFolder
+                            }
+                            const testCases = await generateTestCasesForFile(client, modelId, fileMeta);
                             allTestCases = allTestCases.concat(testCases);
                         }
                     }
@@ -184,7 +221,13 @@ export async function generateUnitTestsSuite(
                 });
                 if ('content' in content && typeof content.content === 'string') {
                     const decodedContent = Buffer.from(content.content, 'base64').toString('utf8');
-                    const testCases = await generateTestCasesForFile(client, modelId, decodedContent);
+                    const fileMeta = {
+                        fileName: file.filename,
+                        filePath: file.filename,
+                        fileContent: decodedContent,
+                        rootDir: unitTestSourceFolder
+                    }
+                    const testCases = await generateTestCasesForFile(client, modelId, fileMeta);
                     allTestCases = allTestCases.concat(testCases);
                 }
             }
@@ -243,7 +286,12 @@ export async function generateUnitTestsSuite(
 async function generateTestCasesForFile(
     client: BedrockRuntimeClient,
     modelId: string,
-    fileContent: string
+    fileMeta: {
+        fileName: string,
+        filePath: string,
+        fileContent: string,
+        rootDir: string
+    }
 ): Promise<any[]> {
     const temperatures = [0.2, 0.5, 0.8, 1.0];
     const snippetMap = new SnippetMap();
@@ -259,7 +307,7 @@ async function generateTestCasesForFile(
         collector
     );
 
-    await testGenerator.generateAndValidateTests(fileContent, []); // Assuming no snippets for now
+    await testGenerator.generateAndValidateTests(fileMeta, []); // Assuming no snippets for now
 
     return collector.getTestResults();
 }
