@@ -225,7 +225,7 @@ npm run start`} />
               This will start the server locally. For a more stable user experience, consider hosting the code as a container or daemon process in a separate infrastructure.
             </p>
 
-            <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">3. Interacting with GitHub App</h3>
+            <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">3. Interacting with GitHub App (Note this feature is still under development with limited functionality)</h3>
             <p className="mb-4 text-gray-600">Once the server is running, you can interact with the GitHub App by commenting on pull requests. Here are some example commands:</p>
             <ul className="list-disc list-inside mb-4 text-gray-600">
               <li>@IBTBot generate interesting stats about this repository and render them as a table.</li>
