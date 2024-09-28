@@ -117,7 +117,7 @@ Outputs:
     Value: !GetAtt Role.Arn`} />
             <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">2. Setting up the GitHub Actions</h3>
             <p className="mb-4 text-gray-600">
-              Here's a complete workflow sample that includes configuring AWS credentials and using the Intelli-Ops GitHub Action. 
+              Here's a complete workflow sample that includes configuring AWS credentials and using the AWS GenAI CI/CD Suite GitHub Action. 
               Go to your repo {'->'} Settings {'->'} Secrets and variables {'->'} Actions {'->'} New repository secret, then add the secret name as e.g. AWS_ROLE_TO_ASSUME, and the value as the role arn, e.g. arn:aws:iam::123456789012:role/role-name created in the previous step, then reference it in the workflow as {'{{'} secrets.AWS_ROLE_TO_ASSUME {'}}'}
             </p>
             <FoldableCommand title="Complete Workflow Sample" command={`name: Intelligent Code Review
@@ -207,9 +207,9 @@ jobs:
           </div>
           <div className="bg-white rounded-lg shadow-md p-6">
             <h3 className="text-2xl font-semibold mt-8 mb-4 text-gray-800">1. Customize Your Own (Optional)</h3>
-            <p className="mb-4 text-gray-600">If you want to customize the Intelli-Ops GitHub Action, you can clone the repository and publish your own release:</p>
-            <FoldableCommand title="Clone and Publish the Action" command={`git clone https://github.com/yike5460/intelli-ops.git
-cd intelli-ops
+            <p className="mb-4 text-gray-600">If you want to customize the AWS GenAI CI/CD Suite GitHub Action, you can clone the repository and publish your own release:</p>
+            <FoldableCommand title="Clone and Publish the Action" command={`git clone https://github.com/aws-samples/aws-genai-cicd-suite
+cd aws-genai-cicd-suite
 version="stable"
 git tag -a $version -m "Release version $version"
 git push origin $version

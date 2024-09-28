@@ -10,12 +10,12 @@ const FAQItem: React.FC<{ question: string; answer: string }> = ({ question, ans
 const FAQ: React.FC = () => {
   const faqs = [
     {
-      question: "How do I set up Intelli-Ops?",
-      answer: "Setting up Intelli-Ops involves configuring IAM to trust GitHub, setting up AWS credentials, cloning and publishing the action, and configuring your GitHub workflow. Detailed steps are provided in the Quick Start guide."
+      question: "How do I set up AWS GenAI CI/CD Suite?",
+      answer: "Setting up AWS GenAI CI/CD Suite involves configuring IAM to trust GitHub, setting up AWS credentials, cloning and publishing the action, and configuring your GitHub workflow. Detailed steps are provided in the Quick Start guide."
     },
     {
-      question: "What AWS services does Intelli-Ops use?",
-      answer: "Intelli-Ops primarily uses AWS Bedrock API for its AI-driven features. It also requires proper IAM configuration for secure access to AWS services."
+      question: "What AWS services does AWS GenAI CI/CD Suite use?",
+      answer: "AWS GenAI CI/CD Suite primarily uses AWS Bedrock API for its AI-driven features. It also requires proper IAM configuration for secure access to AWS services."
     }
   ];
 
