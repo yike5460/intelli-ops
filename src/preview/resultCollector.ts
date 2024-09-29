@@ -52,6 +52,11 @@ export class BaseTestResultCollector implements ITestResultCollector {
         return this.testResults;
     }
 
+    getTestSource(testName: string): string | null {
+        const testInfo = this.tests.get(testName);
+        return testInfo ? testInfo.testSource : null;
+    }
+
     getCoverageInfo(): ICoverageSummary {
         return this.coverageInfo || {
             lines: { total: 0, covered: 0, skipped: 0, pct: 0 },

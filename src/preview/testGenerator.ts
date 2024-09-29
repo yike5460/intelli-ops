@@ -5,10 +5,8 @@ import { PullRequest } from "../utils";
 import { ICompletionModel, LanguageModel } from "./languageModel";
 import { TestValidator } from "./testValidator";
 import { ITestResultCollector, BaseTestResultCollector } from "./resultCollector";
-import { PromptRefiner } from "./promptRefiner";
 import { Inputs, Prompts } from "../prompts";
 import { SnippetMap } from "./snippetMap";
-import { createSourceMapSource } from "typescript";
 
 export class TestGenerator {
     private worklist: Prompts[] = [];
@@ -26,13 +24,15 @@ export class TestGenerator {
         filePath: string,
         fileContent: string,
         rootDir: string
-    }, snippets: string[]): Promise<void> {
+    }, snippets: string[]): Promise<string[]> {
         const inputs: Inputs = new Inputs()
         inputs.fileName = fileMeta.fileName
         inputs.fileContent = fileMeta.fileContent
         inputs.filePath = fileMeta.filePath
 
         const functions = this.extractFunctions(fileMeta.fileContent);
+        let generatedTests: string[] = [];
+
         for (const func of functions) {
             const initialPrompt: Prompts = new Prompts()
             inputs.functionBody = func
@@ -64,6 +64,7 @@ export class TestGenerator {
                         if (testInfo.outcome.status === "PASSED") {
                             generatedPassingTests = true;
                             this.collector.recordTestResult(testInfo);
+                            generatedTests.push(testInfo.testSource);
                             break;
                         } else if (testInfo.outcome.status === "FAILED") {
                             // Re-render the prompt with the error, simple promptRefiner implementation
@@ -88,6 +89,7 @@ export class TestGenerator {
         }
         const coverageSummary = this.validator.getCoverageSummary();
         this.collector.recordCoverageInfo(coverageSummary);
+        return generatedTests;
     }
 
     private validateCompletion(prompt: Prompts, completion: string, rootDir: string): any {
@@ -145,11 +147,10 @@ export async function generateUnitTestsSuite(
     octokit: ReturnType<typeof getOctokit>,
     repo: { owner: string, repo: string },
     unitTestSourceFolder: string
-): Promise<void> {
+): Promise<{ fileName: string, testSource: string }[]> {
     const pullRequest = context.payload.pull_request as PullRequest;
     const branchName = pullRequest.head.ref;
-    let allTestCases: any[] = [];
-
+    let allTestCases: { fileName: string, testSource: string }[] = [];
     // Check if the "auto-unit-test-baseline" tag exists
     const { data: tags } = await octokit.rest.repos.listTags({
         ...repo,
@@ -183,14 +184,14 @@ export async function generateUnitTestsSuite(
                                 rootDir: unitTestSourceFolder
                             }
                             const testCases = await generateTestCasesForFile(client, modelId, fileMeta);
-                            allTestCases = allTestCases.concat(testCases);
+                            allTestCases.push({ fileName: file.name, testSource: testCases.join('\n\n') });
                         }
                     }
                 }
             }
         } catch (error) {
             console.error('Failed to list files in the specified folder:', error);
-            return;
+            return [];
         }
 
         // Create the baseline tag
@@ -228,15 +229,15 @@ export async function generateUnitTestsSuite(
                         rootDir: unitTestSourceFolder
                     }
                     const testCases = await generateTestCasesForFile(client, modelId, fileMeta);
-                    allTestCases = allTestCases.concat(testCases);
+                    allTestCases.push({ fileName: file.filename.split('/').pop() || '', testSource: testCases.join('\n\n') });
                 }
             }
         }
     }
 
     if (allTestCases.length === 0) {
-        console.warn('No test cases generated. Skipping unit tests execution and report generation.');
-        return;
+        console.warn('No test cases generated. Returning empty array.');
+        return [];
     }
 
     // Add the generated unit tests to existing PR
@@ -247,7 +248,7 @@ export async function generateUnitTestsSuite(
             }
 
             // Create a new file with the generated unit tests in test folder
-            const unitTestsContent = allTestCases.map(tc => tc.code).join('\n\n');
+            const unitTestsContent = allTestCases.map(tc => tc.testSource).join('\n\n');
             const unitTestsFileName = 'test/unit_tests.ts';
 
             // Check if the file already exists
@@ -281,6 +282,8 @@ export async function generateUnitTestsSuite(
             throw error;
         }
     }
+
+    return allTestCases;
 }
 
 async function generateTestCasesForFile(
@@ -292,7 +295,7 @@ async function generateTestCasesForFile(
         fileContent: string,
         rootDir: string
     }
-): Promise<any[]> {
+): Promise<string[]> {
     const temperatures = [0.2, 0.5, 0.8, 1.0];
     const snippetMap = new SnippetMap();
     const model = new LanguageModel(client, modelId);
@@ -307,7 +310,5 @@ async function generateTestCasesForFile(
         collector
     );
 
-    await testGenerator.generateAndValidateTests(fileMeta, []); // Assuming no snippets for now
-
-    return collector.getTestResults();
+    return await testGenerator.generateAndValidateTests(fileMeta, []); // Assuming no snippets for now
 }

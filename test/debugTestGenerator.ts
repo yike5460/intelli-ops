@@ -23,17 +23,17 @@ const mockOctokit = {
     repos: {
       listTags: async () => ({ data: [] }),
       getContent: async ({ path }) => {
-        if (path === 'src') {
+        if (path === 'localDemo') {
           return {
             data: [
               {
                 type: 'file',
                 name: 'sample.ts',
-                path: 'src/sample.ts',
+                path: 'localDemo/sample.ts',
               },
             ],
           };
-        } else if (path === 'src/sample.ts') {
+        } else if (path === 'localDemo/sample.ts') {
           return {
             data: {
               content: Buffer.from(sampleFileContent).toString('base64'),
@@ -78,7 +78,7 @@ async function main() {
       "anthropic.claude-3-sonnet-20240229-v1:0", // or any other model ID you're using
       mockOctokit,
       { owner: "testuser", repo: "testrepo" },
-      "src"
+      "localDemo"
     );
     console.log("Unit tests generation completed");
   } catch (error) {

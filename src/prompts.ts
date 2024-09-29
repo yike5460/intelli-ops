@@ -360,7 +360,7 @@ Output: Jest unit test code, with fenced code blocks using the relevant language
 - Use clear and descriptive test names.
 - Include comments in your test code to explain the purpose of each test.
 - Follow TypeScript and Jest best practices.
-- Import internal dependencies and mock external modules, all generated test cases will be placed in the same level folder as the file to be tested, e.g. if the file to be tested is in src/example.ts, the generated test cases will be in test/example.test.ts
+- Import internal dependencies and mock external modules, all generated test cases will be placed in separate but the same level folder as the file to be tested, e.g. if the file to be tested is in src/example.ts, the generated test cases will be in unitTestGenerated/example.test.ts, so the import path should be '../src/example'
 - Use jest.mock() to mock external dependencies like fs, path, and child_process.
 - Include setup and teardown code (beforeEach, afterEach) where necessary.
 - Use appropriate Jest matchers (e.g., toHaveBeenCalledWith, toThrow) for precise assertions.
@@ -403,6 +403,8 @@ export function calculateDiscount(price: number, discountPercentage: number): nu
 
 <Output>
 \`\`\`typescript
+import { calculateDiscount } from '../src/example'
+
 describe('calculateDiscount', () => {
   it('should return the correct discount', () => {
     expect(calculateDiscount(100, 10)).toBe(90);
@@ -487,6 +489,7 @@ export function calculateDiscount(price: number, discountPercentage: number): nu
 }
 
 // Generated unit test code
+import { calculateDiscount } from '../src/example'
 describe('calculateDiscount', () => {
   it('should return the correct discount', () => {
     expect(calculateDiscount(100, 10)).toBe(90);
@@ -509,6 +512,7 @@ Received: 90.00
 
 <Output>
 \`\`\`typescript
+import { calculateDiscount } from '../src/example'
 describe('calculateDiscount', () => {
   it('should return the correct discount', () => {
     expect(calculateDiscount(100, 10)).toBeCloseTo(90, 2);

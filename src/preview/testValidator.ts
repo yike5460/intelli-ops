@@ -13,6 +13,35 @@ export interface ICoverageSummary {
 export class TestValidator {
     private testDir: string;
     private coverageDirs: string[] = [];
+    /* For GitHub Action, the process.cwd() will return the directory of the runner, the file hierarchy will be as follows along with the repo code:
+    /home/runner/work/repo-name/repo-name
+
+    To execute the generated unit tests in fix test/ folder for code in specified folder (rootDir), e.g. src/, we need to configure the tsConfigFile, jestConfigFile accordingly.
+
+    The typical file hierarchy will be as follows:
+    /home/runner/work/[repository-name]/[repository-name]/
+    │
+    ├── .github/
+    │   └── workflows/
+    │       └── main.yml
+    │
+    ├── src/
+    │   ├── file-1.ts
+    │   ├── file-2.ts
+    │   ├── ...
+    │   └── file-n.ts
+    │
+    ├── unitTestGenerated/
+    │   ├── file-1.test.ts
+    │   ├── file-2.test.ts
+    │   ├── ...
+    │   └── file-n.test.ts
+    │
+    ├── .gitignore
+    ├── package.json
+    ├── README.md
+    └── LICENSE
+    */ 
 
     constructor(private packagePath: string = process.cwd()) {
         // this.testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-validator-'));
@@ -47,11 +76,14 @@ export class TestValidator {
                 baseUrl: this.packagePath,
                 paths: {
                     "*": ["*", rootDir + "/*"]
-                }
+                },
+                // Add these options for better module resolution
+                moduleResolution: "node",
+                resolveJsonModule: true
             },
             include: [
                 path.join(this.testDir, "*.ts"),
-                path.join(this.packagePath, rootDir + "/**/*.ts")
+                path.join(this.packagePath, rootDir, "**/*.ts")
             ],
             exclude: ["node_modules"]
         };
@@ -71,6 +103,8 @@ module.exports = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   moduleDirectories: ['node_modules', '${this.packagePath}'],
   rootDir: '${this.packagePath}',
+  modulePaths: ['${path.join(this.packagePath, rootDir)}'],
+  testMatch: ['${path.join(this.testDir, '*.test.ts')}'],
 };`;
         fs.writeFileSync(jestConfigFile, jestConfig);
 
