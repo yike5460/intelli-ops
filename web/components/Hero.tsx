@@ -5,7 +5,7 @@ const Hero = () => {
     <section className="py-20 text-center bg-gradient-to-b from-blue-50 to-white">
       <div className="container mx-auto px-4">
         <h2 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-500 to-purple-600 text-transparent bg-clip-text">
-          Elevate Your IT Operations with Generative AI
+          Elevate Your DevOps Pipeline with Generative AI
         </h2>
         <p className="text-xl mb-8 text-gray-600">Unleash the power of our AI-driven DevOps solution to streamline your workflows, boost productivity, and transform your IT landscape.</p>
         <div className="flex justify-center space-x-4">

@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "es2018",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": "/home/ubuntu/intelli-ops/test",
+    "paths": {
+      "@/*": ["./*"],
+      "test/*": ["./*"]
+    },
+    "moduleResolution": "node",
+    "resolveJsonModule": true
+  },
+  "include": [
+    "./**/*.ts",
+    "../**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

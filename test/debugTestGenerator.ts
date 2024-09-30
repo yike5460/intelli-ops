@@ -23,17 +23,17 @@ const mockOctokit = {
     repos: {
       listTags: async () => ({ data: [] }),
       getContent: async ({ path }) => {
-        if (path === 'localDemo') {
+        if (path === 'test') {
           return {
             data: [
               {
                 type: 'file',
                 name: 'sample.ts',
-                path: 'localDemo/sample.ts',
+                path: 'test/sample.ts',
               },
             ],
           };
-        } else if (path === 'localDemo/sample.ts') {
+        } else if (path === 'test/sample.ts') {
           return {
             data: {
               content: Buffer.from(sampleFileContent).toString('base64'),
@@ -72,18 +72,31 @@ const mockOctokit = {
 };
 
 async function main() {
+
+  // Setup the test environment, create the sample.ts to be tested
+  fs.writeFileSync('sample.ts', sampleFileContent);
+
+  // Run the test generation
   try {
     await generateUnitTestsSuite(
       bedrockClient,
       "anthropic.claude-3-sonnet-20240229-v1:0", // or any other model ID you're using
       mockOctokit,
       { owner: "testuser", repo: "testrepo" },
-      "localDemo"
+      "test"
     );
     console.log("Unit tests generation completed");
   } catch (error) {
     console.error("Error generating unit tests:", error);
   }
+
+  // Check if test cases are generated
+  const testCases = fs.readFileSync('debug_generated_tests.ts', 'utf8');
+  console.log(testCases);
+
+  // Clean up the test environment
+  fs.unlinkSync('sample.ts');
+  fs.unlinkSync('debug_generated_tests.ts');
 }
 
 main();

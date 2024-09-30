@@ -8,9 +8,10 @@ import { setTimeout } from 'timers/promises';
 import { generateUnitTests, runUnitTests, generateTestReport } from '@/src/testGenerator';
 import { generatePRDescription } from '@/src/prGeneration';
 import { generateCodeReviewComment } from '@/src/codeReviewInline';
+import { generateUnitTestsSuite } from '@/src/preview/testGenerator';
 import { invokeModel, PullRequest } from '@/src/utils';
 
-export async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }, unitTestSourceFolder: string): Promise<void> {
+export async function generateUnitTestsSuiteDeprecated(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }, unitTestSourceFolder: string): Promise<void> {
   const pullRequest = context.payload.pull_request as PullRequest;
   const branchName = pullRequest.head.ref;
   let allTestCases: any[] = [];

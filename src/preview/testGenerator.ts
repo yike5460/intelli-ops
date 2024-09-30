@@ -88,6 +88,7 @@ export class TestGenerator {
             }
         }
         const coverageSummary = this.validator.getCoverageSummary();
+        console.log('Coverage summary: ', coverageSummary);
         this.collector.recordCoverageInfo(coverageSummary);
         return generatedTests;
     }
@@ -141,13 +142,46 @@ export class TestGenerator {
     }
 }
 
+async function removeDuplicateImports(allTestCases: { fileName: string, testSource: string }[]): Promise<{ fileName: string, testSource: string }[]> {
+    /* 
+    Remove the duplicate import code since the unit test cases are first generated based on per function basis of each file, and duplicate import, e.g. import { add } from './sample' will be generated for each function
+    allTestCases:  
+    [
+        {
+            fileName: 'sample.ts',
+            testSource: "import { add } from 'test/sample';\n" 
+            ...
+            "import { add } from 'test/sample';\n"
+            ...
+        }
+    ]
+    */
+    return allTestCases.map(testCase => {
+        const lines = testCase.testSource.split('\n');
+        const uniqueImports = new Set<string>();
+        const filteredLines = lines.filter(line => {
+            if (line.trim().startsWith('import ')) {
+                if (uniqueImports.has(line)) {
+                    return false; // Skip duplicate import
+                }
+                uniqueImports.add(line);
+            }
+            return true; // Keep non-import lines and unique imports
+        });
+        return {
+            fileName: testCase.fileName,
+            testSource: filteredLines.join('\n')
+        };
+    });
+}
+
 export async function generateUnitTestsSuite(
     client: BedrockRuntimeClient,
     modelId: string,
     octokit: ReturnType<typeof getOctokit>,
     repo: { owner: string, repo: string },
     unitTestSourceFolder: string
-): Promise<{ fileName: string, testSource: string }[]> {
+): Promise<void> {
     const pullRequest = context.payload.pull_request as PullRequest;
     const branchName = pullRequest.head.ref;
     let allTestCases: { fileName: string, testSource: string }[] = [];
@@ -167,16 +201,13 @@ export async function generateUnitTestsSuite(
             });
             if (Array.isArray(files)) {
                 for (const file of files) {
-                    // console.log('Debugging file:', file);
                     if (file.type === 'file' && file.name.endsWith('.ts')) {
                         const { data: content } = await octokit.rest.repos.getContent({
                             ...repo,
                             path: file.path,
                         });
-                        // console.log('Debugging file content:', content);
                         if ('content' in content && typeof content.content === 'string') {
                             const decodedContent = Buffer.from(content.content, 'base64').toString('utf8');
-                            // console.log('Debugging decoded content:', decodedContent);
                             const fileMeta = {
                                 fileName: file.name,
                                 filePath: file.path,
@@ -191,7 +222,7 @@ export async function generateUnitTestsSuite(
             }
         } catch (error) {
             console.error('Failed to list files in the specified folder:', error);
-            return [];
+            throw error;
         }
 
         // Create the baseline tag
@@ -229,7 +260,7 @@ export async function generateUnitTestsSuite(
                         rootDir: unitTestSourceFolder
                     }
                     const testCases = await generateTestCasesForFile(client, modelId, fileMeta);
-                    allTestCases.push({ fileName: file.filename.split('/').pop() || '', testSource: testCases.join('\n\n') });
+                    allTestCases.push({ fileName: fileMeta.fileName, testSource: testCases.join('\n\n') });
                 }
             }
         }
@@ -237,53 +268,56 @@ export async function generateUnitTestsSuite(
 
     if (allTestCases.length === 0) {
         console.warn('No test cases generated. Returning empty array.');
-        return [];
+        throw new Error('No test cases generated. Returning empty array.');
     }
 
-    // Add the generated unit tests to existing PR
+    allTestCases = await removeDuplicateImports(allTestCases);
+    console.log('Debugging allTestCases after removing duplicate imports: ', allTestCases);
+
     if (pullRequest) {
         try {
             if (!branchName) {
                 throw new Error('Unable to determine the branch name');
             }
 
-            // Create a new file with the generated unit tests in test folder
-            const unitTestsContent = allTestCases.map(tc => tc.testSource).join('\n\n');
-            const unitTestsFileName = 'test/unit_tests.ts';
+            // Create or update test files for each source file
+            for (const testCase of allTestCases) {
+                const sourceFileName = testCase.fileName;
+                const testFileName = sourceFileName.replace(/\.ts$/, '.test.ts');
+                const testFilePath = `test/${testFileName}`;
 
-            // Check if the file already exists
-            let fileSha: string | undefined;
-            try {
-                const { data: existingFile } = await octokit.rest.repos.getContent({
-                    ...repo,
-                    path: unitTestsFileName,
-                    ref: branchName,
-                });
-                if ('sha' in existingFile) {
-                    fileSha = existingFile.sha;
+                // Check if the file already exists
+                let fileSha: string | undefined;
+                try {
+                    const { data: existingFile } = await octokit.rest.repos.getContent({
+                        ...repo,
+                        path: testFilePath,
+                        ref: branchName,
+                    });
+                    if ('sha' in existingFile) {
+                        fileSha = existingFile.sha;
+                    }
+                } catch (error) {
+                    console.log(`File ${testFilePath} does not exist in the repository. Creating it.`);
                 }
-            } catch (error) {
-                console.log(`File ${unitTestsFileName} does not exist in the repository. Creating it.`);
+
+                await octokit.rest.repos.createOrUpdateFileContents({
+                    ...repo,
+                    path: testFilePath,
+                    message: `Add or update unit tests for ${sourceFileName}`,
+                    content: Buffer.from(testCase.testSource).toString('base64'),
+                    branch: branchName,
+                    sha: fileSha,
+                });
+
+                console.log(`Unit tests file ${testFilePath} created or updated successfully.`);
             }
-
-            await octokit.rest.repos.createOrUpdateFileContents({
-                ...repo,
-                path: unitTestsFileName,
-                message: 'Add or update generated unit tests',
-                content: Buffer.from(unitTestsContent).toString('base64'),
-                branch: branchName,
-                sha: fileSha,
-            });
-
-            console.log(`Unit tests file ${unitTestsFileName} created or updated successfully.`);
 
         } catch (error) {
             console.error('Error occurred while pushing the changes to the PR branch', error);
             throw error;
         }
     }
-
-    return allTestCases;
 }
 
 async function generateTestCasesForFile(
