@@ -128,7 +128,9 @@ export class TestGenerator {
             if (match && match[1]) {
                 return match[1].trim();
             }
-            throw new Error('No code block found in the completion');
+            // throw new Error('No code block found in the completion');
+            console.warn('No code block found in the completion, returning the original completion instead');
+            return completion;
         } catch (error) {
             console.log('Error parsing completion: ', error)
             throw error;

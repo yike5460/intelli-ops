@@ -59,7 +59,7 @@ export class TestValidator {
     }
 
     validateTest(testName: string, testSource: string, rootDir: string): { status: string; error?: string } {
-        console.log('Validating test: ', testName, '\nTest source: ', testSource, '\nRoot dir: ', rootDir);
+        console.log('Validating test: ', testName, '\nTest source: ', testSource, '\nRoot dir: ', rootDir, '\nTest dir: ', this.testDir, '\nCurrent folder hierarchy: ', fs.readdirSync(this.packagePath));
         const testFile = path.join(this.testDir, `${testName}.test.ts`);
         fs.writeFileSync(testFile, testSource);
         // const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "jest-validator"));
