@@ -62,13 +62,13 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         aws-region: us-east-1
         model-id: anthropic.claude-3-sonnet-20240229-v1:0
-        generate-code-review: 'true'
+        generate-code-review: 'false'
         generate-code-review-level: 'detailed'
         generate-code-review-exclude-files: '*.md,*.json,*.js'
-        generate-pr-description: 'true'
+        generate-pr-description: 'false'
         generate-unit-test: 'true'
         generate-unit-test-source-folder: 'debugging'
-        generate-unit-test-exclude-files: '*.md,*.json,*.js'
+        # Removed the invalid input 'generate-unit-test-exclude-files'
         # output-language: 'zh'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
