@@ -197,10 +197,21 @@ async function run(): Promise<void> {
 
     // branch to generate unit tests suite
     if (generateUnitTest.toLowerCase() === 'true') {
+      console.log('Start to generate unit test suite');
       if (!unitTestSourceFolder) {
         throw new Error('Test folder path is not specified');
       }
-      await generateUnitTestsSuite(bedrockClient, modelId, octokit, unitTestExcludePatterns, repo, unitTestSourceFolder);
+      /* 
+      export async function generateUnitTestsSuite(
+        client: BedrockRuntimeClient,
+        modelId: string,
+        octokit: ReturnType<typeof getOctokit>,
+        excludePatterns: string[],
+        repo: { owner: string, repo: string },
+        unitTestSourceFolder: string
+      )  
+      */
+      await generateUnitTestsSuite(bedrockClient, modelId, octokit, repo, unitTestSourceFolder);
     }
 
   } catch (error) {

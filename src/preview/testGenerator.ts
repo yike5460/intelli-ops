@@ -182,14 +182,14 @@ export async function generateUnitTestsSuite(
     client: BedrockRuntimeClient,
     modelId: string,
     octokit: ReturnType<typeof getOctokit>,
-    excludePatterns: string[],
+    // excludePatterns: string[],
     repo: { owner: string, repo: string },
     unitTestSourceFolder: string
 ): Promise<void> {
     const pullRequest = context.payload.pull_request as PullRequest;
     const branchName = pullRequest.head.ref;
     let allTestCases: { fileName: string, testSource: string }[] = [];
-    console.log('Generate unit test for folder: ', unitTestSourceFolder, ' with exclude patterns: ', excludePatterns);
+
     // Check if the "auto-unit-test-baseline" tag exists
     const { data: tags } = await octokit.rest.repos.listTags({
         ...repo,
@@ -207,9 +207,9 @@ export async function generateUnitTestsSuite(
             });
             if (Array.isArray(files)) {
                 for (const file of files) {
-                    console.log(`File ${file.name} will be excluded for unit test generation: ${shouldExcludeFile(file.name, excludePatterns)}`);
+                    // console.log(`File ${file.name} will be excluded for unit test generation: ${shouldExcludeFile(file.name, excludePatterns)}`);
                     // TODO, currently we hard code the suffix should be .ts, this should be configurable using excludePatterns in the future
-                    if (file.type === 'file' && file.name.endsWith('.ts') && !shouldExcludeFile(file.name, excludePatterns)) {
+                    if (file.type === 'file' && file.name.endsWith('.ts')) {
                         const { data: content } = await octokit.rest.repos.getContent({
                             ...repo,
                             path: file.path,
