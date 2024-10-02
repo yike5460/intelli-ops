@@ -189,6 +189,7 @@ export async function generateUnitTestsSuite(
     const pullRequest = context.payload.pull_request as PullRequest;
     const branchName = pullRequest.head.ref;
     let allTestCases: { fileName: string, testSource: string }[] = [];
+    console.log('Generate unit test for folder: ', unitTestSourceFolder, ' with exclude patterns: ', excludePatterns);
     // Check if the "auto-unit-test-baseline" tag exists
     const { data: tags } = await octokit.rest.repos.listTags({
         ...repo,
@@ -197,6 +198,7 @@ export async function generateUnitTestsSuite(
     const baselineTagExists = tags.some(tag => tag.name === 'auto-unit-test-baseline');
 
     if (!baselineTagExists) {
+        console.log('Baseline tag does not exist, generating tests for all .ts files in the specified folder');
         // Generate tests for all .ts files in the specified folder
         try {
             const { data: files } = await octokit.rest.repos.getContent({
@@ -244,6 +246,7 @@ export async function generateUnitTestsSuite(
             console.error('Failed to create tag:', error);
         }
     } else {
+        console.log('Baseline tag exists, generating tests for changed .ts files in the PR');
         // Generate tests only for files changed in the PR
         const { data: changedFiles } = await octokit.rest.pulls.listFiles({
             ...repo,

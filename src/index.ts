@@ -146,6 +146,7 @@ async function run(): Promise<void> {
     const awsRegion = core.getInput('aws-region');
     const modelId = core.getInput('model-id');
     const excludeFiles = core.getInput('generate-code-review-exclude-files');
+    const excludePatterns = excludeFiles ? excludeFiles.split(',').map(p => p.trim()) : [];
     const reviewLevel = core.getInput('generate-code-review-level');
     const generateCodeReview = core.getInput('generate-code-review');
     const generatePrDescription = core.getInput('generate-pr-description');
@@ -153,7 +154,7 @@ async function run(): Promise<void> {
     const outputLanguage = core.getInput('output-language');
     const unitTestSourceFolder = core.getInput('generate-unit-test-source-folder');
     const unitTestExcludeFiles = core.getInput('generate-unit-test-exclude-files');
-    const excludePatterns = excludeFiles ? excludeFiles.split(',').map(p => p.trim()) : [];
+    const unitTestExcludePatterns = unitTestExcludeFiles ? unitTestExcludeFiles.split(',').map(p => p.trim()) : [];
 
     console.log(`GitHub Token: ${githubToken ? 'Token is set' : 'Token is not set'}`);
     console.log(`AWS Region: ${awsRegion}`);
@@ -199,7 +200,7 @@ async function run(): Promise<void> {
       if (!unitTestSourceFolder) {
         throw new Error('Test folder path is not specified');
       }
-      await generateUnitTestsSuite(bedrockClient, modelId, octokit, excludePatterns, repo, unitTestSourceFolder);
+      await generateUnitTestsSuite(bedrockClient, modelId, octokit, unitTestExcludePatterns, repo, unitTestSourceFolder);
     }
 
   } catch (error) {
