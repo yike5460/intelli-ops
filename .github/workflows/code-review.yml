@@ -68,6 +68,7 @@ jobs:
         generate-pr-description: 'true'
         generate-unit-test: 'true'
         generate-unit-test-source-folder: 'debugging'
+        generate-unit-test-exclude-files: '*.md,*.json,*.js'
         # output-language: 'zh'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

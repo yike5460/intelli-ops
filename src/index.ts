@@ -152,7 +152,7 @@ async function run(): Promise<void> {
     const generateUnitTest = core.getInput('generate-unit-test');
     const outputLanguage = core.getInput('output-language');
     const unitTestSourceFolder = core.getInput('generate-unit-test-source-folder');
-
+    const unitTestExcludeFiles = core.getInput('generate-unit-test-exclude-files');
     const excludePatterns = excludeFiles ? excludeFiles.split(',').map(p => p.trim()) : [];
 
     console.log(`GitHub Token: ${githubToken ? 'Token is set' : 'Token is not set'}`);
@@ -164,7 +164,9 @@ async function run(): Promise<void> {
     console.log(`Review level: ${reviewLevel}`);
     console.log(`Generate PR description: ${generatePrDescription.toLowerCase() === 'true' ? 'true' : 'false'}`);
     console.log(`Generate unit test suite: ${generateUnitTest.toLowerCase() === 'true' ? 'true' : 'false'}`);
-    console.log(`Test folder path: ${unitTestSourceFolder}`);
+    console.log(`Generate unit test source folder: ${unitTestSourceFolder}`);
+    console.log(`Generate unit test exclude files: ${unitTestExcludeFiles}`);
+
     if (!githubToken) {
       throw new Error('GitHub token is not set');
     }
@@ -197,7 +199,7 @@ async function run(): Promise<void> {
       if (!unitTestSourceFolder) {
         throw new Error('Test folder path is not specified');
       }
-      await generateUnitTestsSuite(bedrockClient, modelId, octokit, repo, unitTestSourceFolder);
+      await generateUnitTestsSuite(bedrockClient, modelId, octokit, excludePatterns, repo, unitTestSourceFolder);
     }
 
   } catch (error) {

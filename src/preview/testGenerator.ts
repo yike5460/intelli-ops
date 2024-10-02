@@ -1,6 +1,7 @@
 import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
 import { context } from "@actions/github";
 import { getOctokit } from "@actions/github";
+import { shouldExcludeFile } from "../utils";
 import { PullRequest } from "../utils";
 import { ICompletionModel, LanguageModel } from "./languageModel";
 import { TestValidator } from "./testValidator";
@@ -181,6 +182,7 @@ export async function generateUnitTestsSuite(
     client: BedrockRuntimeClient,
     modelId: string,
     octokit: ReturnType<typeof getOctokit>,
+    excludePatterns: string[],
     repo: { owner: string, repo: string },
     unitTestSourceFolder: string
 ): Promise<void> {
@@ -203,7 +205,9 @@ export async function generateUnitTestsSuite(
             });
             if (Array.isArray(files)) {
                 for (const file of files) {
-                    if (file.type === 'file' && file.name.endsWith('.ts')) {
+                    console.log(`File ${file.name} will be excluded for unit test generation: ${shouldExcludeFile(file.name, excludePatterns)}`);
+                    // TODO, currently we hard code the suffix should be .ts, this should be configurable using excludePatterns in the future
+                    if (file.type === 'file' && file.name.endsWith('.ts') && !shouldExcludeFile(file.name, excludePatterns)) {
                         const { data: content } = await octokit.rest.repos.getContent({
                             ...repo,
                             path: file.path,
