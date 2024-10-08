@@ -148,7 +148,8 @@ module.exports = {
             const failedTestResult = report.testResults[0].assertionResults.find((result: any) => result.status === 'failed');
             return { status: 'FAILED', error: failedTestResult ? failedTestResult.failureMessages.join('\n') : 'Unknown error' };
         }
-
+        
+        // Only record the coverage directory if all tests passed
         this.coverageDirs.push(coverageDir);
         return { status: 'PASSED' };
     }

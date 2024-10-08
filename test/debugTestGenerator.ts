@@ -94,9 +94,9 @@ async function main() {
   console.log("The generated test cases are: ", testCases);
 
   // Clean up the test environment
-  fs.unlinkSync('sample.ts');
-  fs.unlinkSync('sample.test.ts');
-  fs.unlinkSync('AUTO_GENERATED_TESTS_README.md');
+  // fs.unlinkSync('sample.ts');
+  // fs.unlinkSync('sample.test.ts');
+  // fs.unlinkSync('AUTO_GENERATED_TESTS_README.md');
 }
 
 main();
