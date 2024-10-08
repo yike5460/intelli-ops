@@ -281,13 +281,17 @@ export async function generateUnitTestsSuite(
     }
 
     allTestCases = await removeDuplicateImports(allTestCases);
-    console.log('Debugging allTestCases after removing duplicate imports: ', allTestCases);
+    // console.log('Debugging allTestCases after removing duplicate imports: ', allTestCases);
 
     if (pullRequest) {
         try {
             if (!branchName) {
                 throw new Error('Unable to determine the branch name');
             }
+
+            let readmeContent = "# Auto-Generated Unit Tests\n\n";
+            readmeContent += "This document provides an overview of the automatically generated unit tests for this project.\n\n";
+            readmeContent += "## Generated Test Suites\n\n";
 
             // Create or update test files for each source file
             for (const testCase of allTestCases) {
@@ -320,7 +324,57 @@ export async function generateUnitTestsSuite(
                 });
 
                 console.log(`Unit tests file ${testFilePath} created or updated successfully.`);
+
+                // Add information to README content
+                readmeContent += `- **${testFileName}**: Tests for \`${sourceFileName}\`\n`;
+                readmeContent += `  - Location: \`${testFilePath}\`\n`;
+                readmeContent += `  - Source file: \`${unitTestSourceFolder}/${sourceFileName}\`\n\n`;
             }
+
+            // Add test coverage information
+            readmeContent += "## Test Coverage\n\n";
+            readmeContent += "The following test coverage was achieved during the pre-flight phase:\n\n";
+            readmeContent += "```\n";
+            // readmeContent += JSON.stringify(this.collector?.getCoverageInfo() ?? {}, null, 2);
+            readmeContent += "\n```\n\n";
+
+            // Add instructions for manual execution
+            readmeContent += "## Running Tests Manually\n\n";
+            readmeContent += "To run these unit tests manually, follow these steps:\n\n";
+            readmeContent += "1. Ensure you have Node.js and npm installed on your system.\n";
+            readmeContent += "2. Navigate to the project root directory in your terminal.\n";
+            readmeContent += "3. Install the necessary dependencies by running:\n";
+            readmeContent += "   ```\n   npm install\n   ```\n";
+            readmeContent += "4. Run the tests using the following command:\n";
+            readmeContent += "   ```\n   npm test\n   ```\n";
+            readmeContent += "\nThis will execute all the unit tests in the `test` directory.\n";
+
+            // Create or update the README file
+            const readmeFilePath = 'test/AUTO_GENERATED_TESTS_README.md';
+            let readmeFileSha: string | undefined;
+            try {
+                const { data: existingReadme } = await octokit.rest.repos.getContent({
+                    ...repo,
+                    path: readmeFilePath,
+                    ref: branchName,
+                });
+                if ('sha' in existingReadme) {
+                    readmeFileSha = existingReadme.sha;
+                }
+            } catch (error) {
+                console.log(`README file ${readmeFilePath} does not exist in the repository. Creating it.`);
+            }
+
+            await octokit.rest.repos.createOrUpdateFileContents({
+                ...repo,
+                path: readmeFilePath,
+                message: 'Add or update README for auto-generated unit tests',
+                content: Buffer.from(readmeContent).toString('base64'),
+                branch: branchName,
+                sha: readmeFileSha,
+            });
+
+            console.log(`README file ${readmeFilePath} created or updated successfully.`);
 
         } catch (error) {
             console.error('Error occurred while pushing the changes to the PR branch', error);

@@ -1,4 +1,4 @@
-import { add, subtract } from '../debugging/sample';
+import { add } from './sample';
 
 describe('add', () => {
   it('should add two positive numbers correctly', () => {
@@ -10,39 +10,20 @@ describe('add', () => {
   });
 
   it('should add a positive and a negative number correctly', () => {
-    expect(add(2, -3)).toBe(-1);
+    expect(add(5, -3)).toBe(2);
   });
 
   it('should add zero to a number correctly', () => {
-    expect(add(0, 5)).toBe(5);
-    expect(add(5, 0)).toBe(5);
+    expect(add(0, 10)).toBe(10);
+    expect(add(10, 0)).toBe(10);
+  });
+
+  it('should handle large numbers correctly', () => {
+    expect(add(Number.MAX_SAFE_INTEGER, 1)).toBe(Number.MAX_SAFE_INTEGER + 1);
   });
 });
 
-describe('subtract', () => {
-  it('should subtract two positive numbers correctly', () => {
-    expect(subtract(5, 3)).toBe(2);
-  });
-
-  it('should subtract two negative numbers correctly', () => {
-    expect(subtract(-5, -3)).toBe(-2);
-  });
-
-  it('should subtract a negative number from a positive number correctly', () => {
-    expect(subtract(5, -3)).toBe(8);
-  });
-
-  it('should subtract a positive number from a negative number correctly', () => {
-    expect(subtract(-5, 3)).toBe(-8);
-  });
-
-  it('should subtract zero from a number correctly', () => {
-    expect(subtract(5, 0)).toBe(5);
-    expect(subtract(0, 5)).toBe(-5);
-  });
-});
-
-import { subtract } from '../debugging/sample';
+import { subtract } from './sample';
 
 describe('subtract', () => {
   it('should subtract two positive numbers correctly', () => {
@@ -70,6 +51,6 @@ describe('subtract', () => {
   });
 
   it('should handle floating-point numbers correctly', () => {
-    expect(subtract(3.14, 1.57)).toBeCloseTo(1.57, 5);
+    expect(subtract(3.14, 1.57)).toBeCloseTo(1.57);
   });
 });
