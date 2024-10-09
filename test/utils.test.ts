@@ -30,7 +30,7 @@ describe('shouldExcludeFile', () => {
   });
 
   test.each`
-    filename                  | excludePatterns                | expected
+    filename                  | excludePatterns                  | expected
     ${'src/components/Header.tsx'} | ${['*.tsx', 'src/components/*']} | ${true}
     ${'src/utils/helpers.ts'}      | ${['*.tsx', 'src/components/*']} | ${false}
     ${'src/utils/helpers.ts'}      | ${['*.ts', 'src/utils/*']}       | ${true}

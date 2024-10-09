@@ -51,11 +51,11 @@ describe('subtract', () => {
     expect(subtract(-10, -5)).toBe(-5);
   });
 
-  it('should handle subtracting a negative number from a positive number', () => {
+  it('should subtract a negative number from a positive number correctly', () => {
     expect(subtract(10, -5)).toBe(15);
   });
 
-  it('should handle subtracting a positive number from a negative number', () => {
+  it('should subtract a positive number from a negative number correctly', () => {
     expect(subtract(-10, 5)).toBe(-15);
   });
 
@@ -63,11 +63,11 @@ describe('subtract', () => {
     expect(subtract(10, 10)).toBe(0);
   });
 
-  it('should handle subtracting 0 from a number', () => {
-    expect(subtract(5, 0)).toBe(5);
+  it('should handle large numbers correctly', () => {
+    expect(subtract(1000000000, 500000000)).toBe(500000000);
   });
 
-  it('should handle subtracting a number from 0', () => {
-    expect(subtract(0, 5)).toBe(-5);
+  it('should handle floating-point numbers correctly', () => {
+    expect(subtract(3.14, 1.57)).toBeCloseTo(1.57, 5);
   });
 });
