@@ -10,13 +10,12 @@ describe('add', () => {
   });
 
   it('should add a positive and a negative number correctly', () => {
-    expect(add(2, -3)).toBe(-1);
+    expect(add(5, -3)).toBe(2);
   });
 
-  it('should add zero correctly', () => {
-    expect(add(0, 5)).toBe(5);
-    expect(add(5, 0)).toBe(5);
-    expect(add(0, 0)).toBe(0);
+  it('should add zero to a number correctly', () => {
+    expect(add(0, 10)).toBe(10);
+    expect(add(10, 0)).toBe(10);
   });
 });
 
@@ -29,14 +28,17 @@ describe('subtract', () => {
     expect(subtract(-5, -3)).toBe(-2);
   });
 
-  it('should subtract a positive and a negative number correctly', () => {
+  it('should subtract a negative number from a positive number correctly', () => {
     expect(subtract(5, -3)).toBe(8);
+  });
+
+  it('should subtract a positive number from a negative number correctly', () => {
     expect(subtract(-5, 3)).toBe(-8);
   });
 
-  it('should handle subtracting from zero correctly', () => {
-    expect(subtract(0, 5)).toBe(-5);
-    expect(subtract(5, 0)).toBe(5);
+  it('should subtract zero from a number correctly', () => {
+    expect(subtract(10, 0)).toBe(10);
+    expect(subtract(0, 10)).toBe(-10);
   });
 });
 
