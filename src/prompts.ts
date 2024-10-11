@@ -201,7 +201,7 @@ Input: hunks content with hunk headers. Lines starting with '+' are additions, a
 + This is the new line 1.
 + This is an unchanged line.
 @@ is the hunk header that shows where the changes are and how many lines are changed. In this case, it indicates that the changes start at line 1 of the old file and affect 3 lines, and start at line 1 of the new file and affect 2 lines
-Additional Context: PR title, description, summaries and comment chains.
+Additional Context: PR title, PR description, summaries.
 
 Output: Review the input following the <Review Guidelines>, and output the review comments in the following format:
 - The review comment consists of: one sentence provide specific actionable feedback on the code change with bolded markdown text, and explanation of the feedback with exact line number ranges in new hunks in markdown format. Start and end line numbers must be within the same hunk. For single-line comments, start=end line number.
@@ -210,7 +210,7 @@ Output: Review the input following the <Review Guidelines>, and output the revie
 - Do not use \`suggestion\` code blocks.
 - XML tag must not be outputted.
 - For fixes, use \`diff\` code blocks, marking changes with \`+\` or \`-\`. The line number range for comments with fix snippets must exactly match the range to replace in the new hunk.
-- If there are no issues found or simple enough on a line range, you MUST respond with the text \`Looks Good To Me!\` for that line range in the review section only, no more output otherwise.
+- If there are no issues found or simple enough on a line range, you MUST respond with the text \`Looks Good To Me!\` in the beginning for that line range in the review section only, no more output otherwise.
 - Limit the total response within 100 words, the output language should be {{language_name}}.
 - Refer to the <Examples> below for the exact format of the output.
 </Input and Output>
