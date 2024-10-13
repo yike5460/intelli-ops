@@ -1,6 +1,7 @@
 import { FunctionRegistry, RegisteredFunction } from './FunctionRegistry';
 import { LargeLanguageModel } from './LargeLanguageModel';
 import { ActionTypeDeterminer, FunctionType } from './ActionTypeDeterminer';
+import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime';
 
 interface ExecutionResult {
   success: boolean;
@@ -14,9 +15,9 @@ export class ActionExecutor {
   private llm: LargeLanguageModel;
   private actionTypeDeterminer: ActionTypeDeterminer;
 
-  constructor(registry: FunctionRegistry, llm: LargeLanguageModel) {
+  constructor(registry: FunctionRegistry, client: BedrockRuntimeClient, modelId: string) {
     this.registry = registry;
-    this.llm = llm;
+    this.llm = new LargeLanguageModel(client, modelId);
     this.actionTypeDeterminer = new ActionTypeDeterminer();
   }
 

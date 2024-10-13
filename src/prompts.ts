@@ -25,6 +25,9 @@ export class Inputs {
     generatedUnitTestCodeExecutionError: string = ''
     generatedUnitTestCode: string = ''
 
+    // app intention classification
+    userQuery: string = ''
+
     constructor(
         systemMessage = '',
         title = '',
@@ -49,7 +52,10 @@ export class Inputs {
         docComments: string = '',
         functionBody: string = '',
         generatedUnitTestCodeExecutionError: string = '',
-        generatedUnitTestCode: string = ''
+        generatedUnitTestCode: string = '',
+
+        // app intention classification
+        userQuery: string = ''
     ) {
         this.systemMessage = systemMessage
         this.title = title
@@ -94,7 +100,10 @@ export class Inputs {
         this.docComments,
         this.functionBody,
         this.generatedUnitTestCodeExecutionError,
-        this.generatedUnitTestCode
+        this.generatedUnitTestCode,
+
+        // app intention classification
+        this.userQuery
       )
     }
   
@@ -143,6 +152,9 @@ export class Inputs {
         }
         if (this.generatedUnitTestCode) {
             content = content.replace('{{generated_unit_test_code}}', this.generatedUnitTestCode)
+        }
+        if (this.userQuery) {
+            content = content.replace('{{user_query}}', this.userQuery)
         }
         return content
     }
@@ -286,7 +298,6 @@ The condition has removed the null check for \`nameObj\`. This change could pote
 `
     // TODO: add concise review prompt, use the same format as detailed review prompt for now
     conciseReviewPrompt = this.detailedReviewPrompt
-
 
     /**
 * Structured representation of a prompt we finally send to the model to generate test cases, which is a generation from another prompt.
@@ -524,6 +535,67 @@ describe('calculateDiscount', () => {
 </Example>
 `
 
+    intentionClassificationPrompt =
+`
+<Task Context>
+You are an AI assistant for a GitHub repository, designed to help users with various repository-related tasks.
+</Task Context>
+
+<Tone Context>
+Maintain a helpful and professional tone, focusing on accurately classifying user queries.
+</Tone Context>
+
+<Background Data>
+You have access to repository statistics, code analysis tools, and configuration files.
+</Background Data>
+
+<Detailed Task Description>
+
+<Input and Output>
+Input: {{user_query}}
+Output: Classify the user's query into one of the predefined categories, respond with only the category name, nothing else.
+</Input and Output>
+
+<Guidelines>
+- If the query doesn't fit any category, classify it as "Other (general query)".
+- Think step by step, reasoning through the query and the context of the repository
+- Do not attempt to execute any actions; your task is solely classification.
+- Compare the query to the predefined categories and examples, and choose the most appropriate category.
+</Guidelines>
+
+<Categories>
+- Code review and analysis
+- Repository management
+- Documentation tasks
+- GitHub Actions and CI/CD operations
+- Other (general query)
+</Categories>
+</Detailed Task Description>
+
+<Examples>
+<Input>
+I pushed a fix in commit 4a8fd9f, please review it.
+</Input>
+<Output>
+Code review and analysis
+</Output>
+
+<Input>
+Summarize stats about this repository and render them as a table. Additionally, render a pie chart showing the language distribution in the codebase.
+</Input>
+<Output>
+Repository management
+</Output
+
+<Input>
+Generate a Pull Request description for this PR.
+</Input>
+<Output>
+Documentation tasks
+</Output>
+</Examples>
+`
+
     renderDetailedReviewPrompt(inputs: Inputs): string {
       return inputs.render(this.detailedReviewPrompt)
     }
@@ -539,5 +611,9 @@ describe('calculateDiscount', () => {
 
     renderUnitTestGenerationRefinedPrompt(inputs: Inputs): string {
       return inputs.render(this.unitTestGenerationRefinedPrompt)
+    }
+
+    renderIntentionClassificationPrompt(inputs: Inputs): string {
+      return inputs.render(this.intentionClassificationPrompt)
     }
 }
