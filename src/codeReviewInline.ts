@@ -107,6 +107,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
           additionalCommentsCount++;
           // add delimiter symbol "---" per file end to make the output more readable
           additionalCommentsDetails.push(`${file.filename} (hunk index: ${hunkIndex}):\n${review}\n\n---\n`);
+          console.log("The full review skipped due to LGTM is: ", review);
           continue;
         }
         console.log("Review for file: ", file.filename, "hunk: ", hunkIndex, "is: ", review);
