@@ -77,6 +77,7 @@ functionRegistry.registerFunction({
   }
 });
 
+// Entry point for issue comments raise in PR
 export async function handleIssueComment(event: WebhookEvent, octokit: Octokit) {
   if ('comment' in event && 'issue' in event) {
     const { comment, issue, repository } = event;

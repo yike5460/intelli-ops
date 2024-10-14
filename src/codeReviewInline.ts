@@ -64,8 +64,8 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
         // hunkLines and hunkContent indeed contain the same information, just in different formats:
         // hunkLines is an array of strings, where each string represents a line of the hunk.
         // hunkContent is a single string, which is the result of joining all the lines in hunkLines with newline characters.
-        const hunkLines = hunk.split('\n')
-        const hunkContent = hunkLines.join('\n');
+        const hunkLines: string[] = hunk.split('\n')
+        const hunkContent: string = hunkLines.join('\n');
         const languageName = languageCodeToName[outputLanguage as LanguageCode] || 'English';
         if (!(outputLanguage in languageCodeToName)) {
           core.warning(`Unsupported output language: ${outputLanguage}. Defaulting to English.`);
@@ -109,18 +109,51 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
           additionalCommentsDetails.push(`${file.filename} (hunk index: ${hunkIndex}):\n${review}\n\n---\n`);
           continue;
         }
+        console.log("Review for file: ", file.filename, "hunk: ", hunkIndex, "is: ", review);
+        // Parse multiple comments from the review, example output:
+        /* 
+        8-8:
+        **Use type annotations for function parameters and return types.** TypeScript provides type annotations to help catch potential bugs during development and improve code maintainability.
 
-        // Prepend the header to each review comment
-        const reviewWithHeader = `${CODE_REVIEW_HEADER}\n\n${review}`;
+        ```typescript
+        export function add(a: number, b: number): number {
+          return a + b;
+        }
+        ```
 
-        // add the generated review comments to the end of per hunk
-        const position = totalPosition + 1;
-        reviewComments.push({
-          path: file.filename,
-          position: position,
-          body: reviewWithHeader,
-        });
-        totalPosition += hunkLines.length;
+        6-7:
+        **Consider using a more descriptive function name for `subtract`.** A function name like `minus` or `difference` might better convey the operation being performed.
+
+        ```typescript
+        export function subtract(a: number, b: number): number {
+          return a - b;
+        }
+        ```
+        */
+        const comments = parseReviewComments(review);
+
+        for (const comment of comments) {
+          const { startLine, endLine, body } = comment;
+          console.log("startLine: ", startLine);
+          console.log("endLine: ", endLine);
+          console.log("body: ", body);
+          // Calculate the actual position in the file
+          const hunkHeaderMatch = hunkLines[0] ? hunkLines[0].match(/^@@ -\d+,\d+ \+(\d+),/) : null;
+          const hunkStartLine = hunkHeaderMatch && hunkHeaderMatch[1] ? parseInt(hunkHeaderMatch[1]) : 1;
+          console.log("Hunk start line: ", hunkStartLine);
+          const position = totalPosition + (startLine - hunkStartLine + 1);
+          console.log("final Position: ", position);
+          // Prepend the header to each review comment
+          const reviewWithHeader = `${CODE_REVIEW_HEADER}\n\n${body}`;
+
+          reviewComments.push({
+            path: file.filename,
+            position: position,
+            body: reviewWithHeader,
+          });
+        }
+
+        totalPosition += hunkLines.length - 1; // -1 to account for the hunk header
       }
     } else {
       ignoredFilesCount++;
@@ -186,4 +219,31 @@ ${additionalCommentsDetails.map(file => `- ${file}`).join('\n')}
   } else {
     console.log('No review comments to post.');
   }
+}
+
+function parseReviewComments(review: string): { startLine: number; endLine: number; body: string }[] {
+  const comments = [];
+  const lines = review.split('\n');
+  let currentComment = null;
+
+  for (const line of lines) {
+    const match = line.match(/^(\d+)-(\d+):/);
+    if (match) {
+      if (currentComment) {
+        comments.push(currentComment);
+      }
+      currentComment = {
+        startLine: parseInt(match[1] ?? ''),
+        endLine: parseInt(match[2] ?? ''),
+        body: line.slice(match[0].length).trim()
+      };
+    } else if (currentComment) {
+      currentComment.body += '\n' + line.trim();
+    }
+  }
+
+  if (currentComment) {
+    comments.push(currentComment);
+  }
+  return comments;
 }
