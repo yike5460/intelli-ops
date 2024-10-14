@@ -111,7 +111,7 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
           continue;
         }
         console.log("Review for file: ", file.filename, "hunk: ", hunkIndex, "is: ", review);
-        // Parse multiple comments from the review, example output:
+        // Parse multiple comments from the review according to current prompt template, example output:
         /* 
         8-8:
         **Use type annotations for function parameters and return types.** TypeScript provides type annotations to help catch potential bugs during development and improve code maintainability.
@@ -135,18 +135,14 @@ export async function generateCodeReviewComment(bedrockClient: BedrockRuntimeCli
 
         for (const comment of comments) {
           const { startLine, endLine, body } = comment;
-          console.log("startLine: ", startLine);
-          console.log("endLine: ", endLine);
-          console.log("body: ", body);
           // Calculate the actual position in the file
           const hunkHeaderMatch = hunkLines[0] ? hunkLines[0].match(/^@@ -\d+,\d+ \+(\d+),/) : null;
           const hunkStartLine = hunkHeaderMatch && hunkHeaderMatch[1] ? parseInt(hunkHeaderMatch[1]) : 1;
-          console.log("Hunk start line: ", hunkStartLine);
+          // We add 1 to calculate the correct position because: 1. GitHub's API uses 1-based indexing for line numbers; 2. The position should account for the hunk header line
           const position = totalPosition + (startLine - hunkStartLine + 1);
-          console.log("final Position: ", position);
           // Prepend the header to each review comment
           const reviewWithHeader = `${CODE_REVIEW_HEADER}\n\n${body}`;
-
+          // The position value equals the number of lines down from the first "@@" hunk header in the file you want to add a comment. The line just below the "@@" line is position 1, the next line is position 2, and so on. The position in the diff continues to increase through lines of whitespace and additional hunks until the beginning of a new file.
           reviewComments.push({
             path: file.filename,
             position: position,
