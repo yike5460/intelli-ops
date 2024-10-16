@@ -12,70 +12,80 @@ const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0';
 
 const intentionClassifier = new IntentionClassifier(bedrockClient, modelId);
 const functionRegistry = new FunctionRegistry();
-const actionExecutor = new ActionExecutor(functionRegistry, bedrockClient, modelId);
 
 // Register functions
-functionRegistry.registerFunction({
-  id: 'generateUnitTests',
-  name: 'Generate Unit Tests',
-  type: FunctionType.CodebaseAware,
-  execute: async (query: string, context: any) => {
-    const { repository, issue, comment } = context;
-    return generateUnitTestsPerFile(repository.full_name, issue.number.toString(), comment.path);
-  }
-});
+function registerFunctions() {
+  functionRegistry.registerFunction({
+    id: 'generateUnitTests',
+    name: 'Generate Unit Tests',
+    description: 'Generate unit tests for a specific file',
+    type: FunctionType.LLMWithRegisteredFunctionAndCodebase,
+    execute: async (query: string, context: any) => {
+      const { repository, issue, comment } = context;
+      return generateUnitTestsPerFile(repository.full_name, issue.number.toString(), comment.path);
+    }
+  });
 
-functionRegistry.registerFunction({
-  id: 'modularizeFunction',
-  name: 'Modularize Function',
-  type: FunctionType.CodebaseAware,
-  execute: async (query: string, context: any) => {
-    const { repository, pull_request, comment } = context;
-    return modularizeFunction(repository.full_name, pull_request.head.ref, comment.path, comment.line);
-  }
-});
+  functionRegistry.registerFunction({
+    id: 'modularizeFunction',
+    name: 'Modularize Function',
+    description: 'Modularize a function into a separate file',
+    type: FunctionType.LLMWithRegisteredFunctionAndCodebase,
+    execute: async (query: string, context: any) => {
+      const { repository, pull_request, comment } = context;
+      return modularizeFunction(repository.full_name, pull_request.head.ref, comment.path, comment.line);
+    }
+  });
 
-functionRegistry.registerFunction({
-  id: 'generateStats',
-  name: 'Generate Repository Stats',
-  type: FunctionType.ExternalAPI,
-  execute: async (query: string, context: any) => {
-    const { repository } = context;
-    return generateStats(repository.full_name);
-  }
-});
+  functionRegistry.registerFunction({
+    id: 'generateStats',
+    name: 'Generate Repository Stats',
+    description: 'Generate repository statistics',
+    type: FunctionType.LLMWithRegisteredFunction,
+    execute: async (query: string, context: any) => {
+      const { repository } = context;
+      return generateStats(repository.full_name);
+    }
+  });
 
-functionRegistry.registerFunction({
-  id: 'findConsoleLogStatements',
-  name: 'Find Console Log Statements',
-  type: FunctionType.CodebaseAware,
-  execute: async (query: string, context: any) => {
-    const { repository } = context;
-    return findConsoleLogStatements(repository.full_name);
-  }
-});
+  functionRegistry.registerFunction({
+    id: 'findConsoleLogStatements',
+    name: 'Find Console Log Statements',
+    description: 'Find console log statements in the codebase',
+    type: FunctionType.LLMWithRegisteredFunctionAndCodebase,
+    execute: async (query: string, context: any) => {
+      const { repository } = context;
+      return findConsoleLogStatements(repository.full_name);
+    }
+  });
 
-functionRegistry.registerFunction({
-  id: 'generateClassDiagram',
-  name: 'Generate Class Diagram',
-  type: FunctionType.CodebaseAware,
-  execute: async (query: string, context: any) => {
-    const { repository } = context;
-    // Extract package path from query or use a default
-    const packagePath = query.includes('package') ? query.split('package')[1].trim() : 'src';
-    return generateClassDiagram(repository.full_name, packagePath);
-  }
-});
+  functionRegistry.registerFunction({
+    id: 'generateClassDiagram',
+    name: 'Generate Class Diagram',
+    description: 'Generate a class diagram for the codebase',
+    type: FunctionType.LLMWithRegisteredFunctionAndCodebase,
+    execute: async (query: string, context: any) => {
+      const { repository } = context;
+      // Extract package path from query or use a default
+      const packagePath = query.includes('package') ? query.split('package')[1].trim() : 'src';
+      return generateClassDiagram(repository.full_name, packagePath);
+    }
+  });
 
-functionRegistry.registerFunction({
-  id: 'debugBotConfig',
-  name: 'Debug Bot Configuration',
-  type: FunctionType.ExternalAPI,
-  execute: async (query: string, context: any) => {
-    const { repository } = context;
-    return debugBotConfig(repository.full_name);
-  }
-});
+  functionRegistry.registerFunction({
+    id: 'debugBotConfig',
+    name: 'Debug Bot Configuration',
+    description: 'Debug bot configuration',
+    type: FunctionType.LLMWithRegisteredFunction,
+    execute: async (query: string, context: any) => {
+      const { repository } = context;
+      return debugBotConfig(repository.full_name);
+    }
+  });
+}
+
+// Call the function to register all functions
+registerFunctions();
 
 // Entry point for issue comments raise in PR
 export async function handleIssueComment(event: WebhookEvent, octokit: Octokit) {
@@ -88,6 +98,9 @@ export async function handleIssueComment(event: WebhookEvent, octokit: Octokit) 
       console.log('Handling issue comment with body: ', commentBody)
       const userQuery = commentBody.replace(appName, '').trim();
       try {
+        // Create a new ActionExecutor instance for each comment
+        const actionExecutor = new ActionExecutor(functionRegistry, bedrockClient, modelId);
+        
         const context = {
           repository: repository,
           issue: issue,
@@ -96,7 +109,6 @@ export async function handleIssueComment(event: WebhookEvent, octokit: Octokit) 
 
         const intention = await intentionClassifier.classify(userQuery, context);
         console.log('User query intention: ', intention);
-
         const result = await actionExecutor.execute(intention, userQuery, context);
 
         let response = '';

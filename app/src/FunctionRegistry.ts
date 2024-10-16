@@ -3,6 +3,7 @@ import { FunctionType } from './ActionTypeDeterminer';
 export interface RegisteredFunction {
   id: string;
   name: string;
+  description: string;
   type: FunctionType;
   execute: (query: string, context: any) => Promise<any>;
 }

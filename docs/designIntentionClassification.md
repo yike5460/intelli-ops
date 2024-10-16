@@ -23,9 +23,9 @@ graph TD
   E --> F[Intention Classifier]
   F --> G[Action Type Determiner]
   G --> H{Action Type}
-  H -->|LLM-Only| I[LLM-Only Function Executor]
-  H -->|Codebase-Aware| J[Codebase-Aware Function Executor]
-  H -->|External API| K[External API Function Executor]
+  H -->|LLMOnly| I[LLM-Only Function Executor]
+  H -->|LLMWithRegisteredFunction| J[LLMWithRegisteredFunction Function Executor]
+  H -->|LLMWithRegisteredFunctionAndCodebase| K[LLMWithRegisteredFunctionAndCodebase Function Executor]
   I --> L[Function Registry]
   J --> L
   K --> L
@@ -39,10 +39,11 @@ The system will handle various types of user queries related to GitHub operation
 
 | Intention Category | Action |
 |--------------------|--------|
-| Code review and analysis | Invoke GitHub API to fetch specific commit/file details or load the whole codebase into memory, then use LLM or registered functions to apply thereon |
-| Repository management | Use GitHub API to fetch repository details or load the whole codebase into memory, then use LLM or registered functions to apply thereon |
-| Documentation tasks | Use LLM to generate documentation according to a style guide, then use registered functions to apply them |
-| GitHub Actions and CI/CD operations | Use GitHub API to fetch workflow details, then use LLM or registered functions to apply thereon |
+| Code review and analysis | Invoke GitHub API to fetch specific commit/file details or load the whole codebase into memory, then use LLM or registered functions to apply thereon, set to action type LLMWithRegisteredFunctionAndCodebase |
+| Repository management | Use GitHub API to fetch repository details or load the whole codebase into memory, then use LLM or registered functions to apply thereon, set to action type LLMWithRegisteredFunction |
+| Documentation tasks | Use LLM to generate documentation according to a style guide, then use registered functions to apply them, set to action type LLMOnly |
+| GitHub Actions and CI/CD operations | Use GitHub API to fetch workflow details, then use LLM or registered functions to apply thereon, set to action type LLMWithRegisteredFunction |
+| Other (general query) | Use LLM to generate output, set to action type LLMOnly |
 
 Sample queries:
 
@@ -96,10 +97,9 @@ class ActionTypeDeterminer {
 ```
 
 We define three main action types:
-1. LLM-Only Actions: Require only LLM interaction.
-2. Codebase-Aware Actions: Need information from the entire codebase.
-3. External API Actions: Invoke registered functions (GitHub API calls, etc.).
-
+1. LLMOnly, only LLM is needed to generate the output
+2. LLMWithRegisteredFunction, LLM is needed together with registered functions, e.g. GitHub API calls
+3. LLMWithRegisteredFunctionAndCodebase, LLM is needed together with registered functions and the whole codebase is loaded into memory
 
 ### 4.3 Function Registry
 
@@ -109,6 +109,7 @@ We implement the Function Registry to manage the registration and retrieval of f
 interface RegisteredFunction {
   id: string;
   name: string;
+  description: string;
   type: FunctionType;
   execute: (query: string, context: any) => Promise<any>;
 }
