@@ -1,3 +1,13 @@
+"""
+Description: This script fetches and analyzes GitHub repository statistics such as pull requests, issues, commits, and comments.
+
+Usage:
+python github_stats.py <repo1,repo2,repo3> --days <number of days>
+
+Sample:
+nohup python github_stats.py "aws/aws-cdk,pingcap/tidb,taosdata/TDengine,langchain-ai/langchain,langgenius/dify,run-llama/llama_index,hiyouga/LLaMA-Factory" --days 30 > output.log 2>&1 &
+"""
+
 import requests
 import os
 from datetime import datetime, timedelta
@@ -5,6 +15,7 @@ import logging
 import time
 import sys
 import json
+import argparse
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -283,11 +294,7 @@ def generate_summary(all_stats, days):
         "date_generated": datetime.utcnow().isoformat()
     }
 
-if __name__ == "__main__":
-    repos_input = input("Enter GitHub repositories (comma-separated, format: owner/repo): ")
-    repos = [repo.strip() for repo in repos_input.split(',')]
-    days = int(input("Enter the number of days to analyze (default 30): ") or 30)
-    
+def main(repos, days):
     try:
         all_stats = process_repos(repos, days)
         summary = generate_summary(all_stats, days)
@@ -327,3 +334,14 @@ if __name__ == "__main__":
 
     except Exception as e:
         logging.exception(f"An error occurred: {str(e)}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="GitHub Repository Statistics")
+    parser.add_argument("repos", help="Comma-separated list of GitHub repositories (format: owner/repo,owner/repo)")
+    parser.add_argument("--days", type=int, default=30, help="Number of days to analyze (default 30)")
+    args = parser.parse_args()
+
+    repos = [repo.strip() for repo in args.repos.split(',')]
+    days = args.days
+
+    main(repos, days)
