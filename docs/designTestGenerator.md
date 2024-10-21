@@ -99,6 +99,136 @@ sequenceDiagram
     Note over TG: End of method (no passing tests found)
 ```
 
+## API Provided
+
+Start with then entry function below:
+```typescript
+export async function generateUnitTestsSuite(client: BedrockRuntimeClient, modelId: string, octokit: ReturnType<typeof getOctokit>, repo: { owner: string, repo: string }, unitTestSourceFolder: string): Promise<void> {
+  const pullRequest = context.payload.pull_request as PullRequest;
+  const branchName = pullRequest.head.ref;
+  let allTestCases: any[] = [];
+
+  // Check if the "auto-unit-test-baseline" tag exists
+  const { data: tags } = await octokit.rest.repos.listTags({
+    ...repo,
+    per_page: 100,
+  });
+  const baselineTagExists = tags.some(tag => tag.name === 'auto-unit-test-baseline');
+
+  if (!baselineTagExists) {
+    // Generate tests for all .ts files in the specified folder
+    try {
+      const { data: files } = await octokit.rest.repos.getContent({
+        ...repo,
+        path: unitTestSourceFolder,
+      });
+
+      if (Array.isArray(files)) {
+        for (const file of files) {
+          if (file.type === 'file') {
+            const { data: content } = await octokit.rest.repos.getContent({
+              ...repo,
+              path: file.path,
+            });
+            if ('content' in content && typeof content.content === 'string') {
+              const decodedContent = Buffer.from(content.content, 'base64').toString('utf8');
+              // TODO, Core logic to generate test cases
+              allTestCases = allTestCases.concat(testCases);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to list files in the specified folder, make sure the folder is correct, error: ', error);
+      return;
+    }
+
+    // Create the baseline tag (changed from "auto unit test baseline" to "auto-unit-test-baseline")
+    try {
+      await octokit.rest.git.createRef({
+        ...repo,
+        ref: 'refs/tags/auto-unit-test-baseline',
+        sha: pullRequest.head.sha,
+      });
+      console.log('Tag created successfully');
+      await setTimeout(5000); // Wait for 5 seconds
+    } catch (error) {
+      console.error('Failed to create tag:', error);
+    }
+  } else {
+    // Generate tests only for files changed in the PR
+    const { data: changedFiles } = await octokit.rest.pulls.listFiles({
+      ...repo,
+      pull_number: pullRequest.number,
+    });
+
+    for (const file of changedFiles) {
+      if (file.filename.startsWith(unitTestSourceFolder)) {
+        const { data: content } = await octokit.rest.repos.getContent({
+          ...repo,
+          path: file.filename,
+          ref: pullRequest.head.sha,
+        });
+        if ('content' in content && typeof content.content === 'string') {
+          const decodedContent = Buffer.from(content.content, 'base64').toString('utf8');
+          // TODO, Core logic to generate test cases
+          allTestCases = allTestCases.concat(testCases);
+        }
+      }
+    }
+  }
+
+  if (allTestCases.length === 0) {
+    console.warn('No test cases generated. Skipping unit tests execution and report generation.');
+    return;
+  }
+
+  // Add the generated unit tests to existing PR
+  if (pullRequest) {
+    try {
+      if (!branchName) {
+        throw new Error('Unable to determine the branch name');
+      }
+
+      // Create a new file with the generated unit tests in test folder
+      const unitTestsContent = allTestCases.map(tc => tc.code).join('\n\n');
+      const unitTestsFileName = 'test/unit_tests.ts';
+
+      // Check if the file already exists
+      let fileSha: string | undefined;
+      try {
+        const { data: existingFile } = await octokit.rest.repos.getContent({
+          ...repo,
+          path: unitTestsFileName,
+          ref: branchName,
+        });
+        if ('sha' in existingFile) {
+          fileSha = existingFile.sha;
+        }
+      } catch (error) {
+        // File doesn't exist, which is fine for the first time
+        console.log(`File ${unitTestsFileName} does not exist in the repository. Creating it.`);
+      }
+
+      await octokit.rest.repos.createOrUpdateFileContents({
+        ...repo,
+        path: unitTestsFileName,
+        message: 'Add or update generated unit tests',
+        content: Buffer.from(unitTestsContent).toString('base64'),
+        branch: branchName,
+        sha: fileSha, // Include the sha if the file exists, undefined otherwise
+      });
+
+      console.log(`Unit tests file ${unitTestsFileName} created or updated successfully.`);
+
+    } catch (error) {
+      console.error('Error occurred while pushing the changes to the PR branch', error);
+      throw error;
+    }
+  }
+}
+```
+
 ## Detailed Explanation
 
 Question: How to initialize the temperature array?
@@ -149,7 +279,7 @@ fs.writeFileSync(
 This writes the test source to a temporary file, replacing the package require statement to use a relative path.
 
 2. Setting up Temporary Directories:
-typescript
+```typescript
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mocha-validator"));
 const coverageDir = path.join(tmpDir, "coverage");
 const coverageReport = path.join(coverageDir, "coverage-final.json");
@@ -193,7 +323,7 @@ It reads the stderr output and tries to parse the JSON report generated by Mocha
 
 5. Determining Test Outcome:
 The validator then determines the test outcome based on several factors:
-typescript
+```typescript
 if (
   res.status != 0 ||
   stderr.includes("AssertionError") ||

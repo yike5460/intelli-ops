@@ -17,8 +17,6 @@ export class IntentionClassifier {
 
     inputs.userQuery = query;
     const prompt = prompts.renderIntentionClassificationPrompt(inputs);
-    console.log('Intention classification prompt: ', prompt);
-
     const result = await invokeModel(this.client, this.modelId, prompt);
     return result;
   }

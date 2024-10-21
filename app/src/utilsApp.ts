@@ -1,6 +1,7 @@
 import { Octokit } from '@octokit/rest';
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { invokeModel } from '../../src/utils';
+import { generateTestCasesForFile } from '../../src/preview/testGenerator';
 
 // Check if GITHUB_APP_TOKEN is set
 if (!process.env.GITHUB_APP_TOKEN) {
@@ -9,63 +10,33 @@ if (!process.env.GITHUB_APP_TOKEN) {
 }
 
 export const octokit = new Octokit({ auth: process.env.GITHUB_APP_TOKEN });
-
 const bedrockClient = new BedrockRuntimeClient({ region: 'us-east-1' });
 const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0'; // Replace with your desired model ID
-const unitTestPrompt = "Generate unit tests for the following code: {{SOURCE_CODE}}";
 
-// invoke the function e.g. await generateUnitTestsPerFile(repository.full_name, issue.number.toString(), file.filename);
-export async function generateUnitTestsPerFile(repoFullName: string, issueNumber: string, fileName: string): Promise<string | undefined> {
+// wrapper function for existing generateTestCasesForFile
+export async function generateUnitTestsPerFile(repo: { owner: string, repo: string }, unitTestSourceFolder: string, filePath: string): Promise<{ generatedTests: string }> {
   try {
-    const [owner, repo] = repoFullName.split('/');
-    const { data: fileContent } = await octokit.rest.repos.getContent({
-      owner,
-      repo,
-      path: fileName,
-      ref: `pull/${issueNumber}/head`
+    const { data: content } = await octokit.rest.repos.getContent({
+      ...repo,
+      path: filePath,
     });
 
-    if ('content' in fileContent && typeof fileContent.content === 'string') {
-      const decodedContent = Buffer.from(fileContent.content, 'base64').toString('utf-8');
-      const prompt = unitTestPrompt.replace('{{SOURCE_CODE}}', decodedContent);
-      const payload = {
-        anthropic_version: "bedrock-2023-05-31",
-        max_tokens: 4096,
-        messages: [
-          {
-            role: "user",
-            content: [{
-              type: "text",
-              text: prompt,
-            }],
-          },
-        ],
-      };
-
-      const command = new InvokeModelCommand({
-          modelId: modelId,
-          contentType: "application/json",
-          body: JSON.stringify(payload),
-      });
-
-      try {
-        const apiResponse = await bedrockClient.send(command)
-        if (apiResponse === undefined) {
-          console.log('Request timed out, returning fake response');
-          return "An error occurred while generating unit tests.";
-        }
-        const decodedResponseBody = new TextDecoder().decode(apiResponse.body);
-        const responseBody = JSON.parse(decodedResponseBody);
-        const finalResult = responseBody.content[0].text;
-        return finalResult;
-      } catch (error) {
-        console.error('Error generating unit tests:', error);
-        return "An error occurred while generating unit tests.";
+    if ('content' in content && typeof content.content === 'string') {
+      const decodedContent = Buffer.from(content.content, 'base64').toString('utf8');
+      const fileMeta = {
+        fileName: filePath,
+        filePath: filePath,
+        fileContent: decodedContent,
+        rootDir: unitTestSourceFolder
       }
+      const { generatedTests, coverageSummary, testResults } = await generateTestCasesForFile(bedrockClient, modelId, fileMeta);
+      return { generatedTests: generatedTests.join('\n\n') };
+    } else {
+      throw new Error('Content is not a file or is empty');
     }
   } catch (error) {
     console.error('Error generating unit tests:', error);
-    return "An error occurred while generating unit tests.";
+    return { generatedTests: 'Error generating unit tests. Please check the file path and try again.' };
   }
 }
 

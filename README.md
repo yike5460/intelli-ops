@@ -7,6 +7,8 @@ The default model is Claude3 Sonnet, which is suitable for general purpose with 
 
 ## Features Overview:
 
+[![Feature Tutorial](https://img.youtube.com/vi/0RtqGIHk9bY/0.jpg)](https://www.youtube.com/watch?v=0RtqGIHk9bY "Feature Tutorial")
+
 ### PR Content Generation:
 
 Using AI-driven GitHub Actions, you can automatically generate content for pull requests based on the changes made in the code. This can include summaries of the changes, explanations of the impact, or even suggestions for further improvements. By automating this process, you can save time for developers and ensure that PRs are more informative and actionable.

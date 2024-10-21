@@ -1,0 +1,40 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '@web/**'  # Only trigger on changes in @web folder
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0  # Fetch all history for all branches and tags
+
+    - name: Check for changes in @web
+      id: check_changes
+      run: |
+        git diff --quiet HEAD^ HEAD -- @web || echo "changes=true" >> $GITHUB_OUTPUT
+
+    - name: Update gh-pages branch
+      if: steps.check_changes.outputs.changes == 'true'
+      run: |
+        git config --global user.name 'GitHub Action'
+        git config --global user.email 'action@github.com'
+        git checkout gh-pages || git checkout --orphan gh-pages
+        git rm -rf .
+        cp -r @web/* .
+        git add .
+        git commit -m "Update GitHub Pages"
+        git push origin gh-pages
+
+    - name: Deploy
+      if: steps.check_changes.outputs.changes == 'true'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_branch: gh-pages

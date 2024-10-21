@@ -51270,6 +51270,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TestGenerator = void 0;
 exports.generateUnitTestsSuite = generateUnitTestsSuite;
+exports.generateTestCasesForFile = generateTestCasesForFile;
 var github_1 = __nccwpck_require__(3228);
 var languageModel_1 = __nccwpck_require__(8453);
 var testValidator_1 = __nccwpck_require__(5280);

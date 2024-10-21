@@ -49,6 +49,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TestGenerator = void 0;
 exports.generateUnitTestsSuite = generateUnitTestsSuite;
+exports.generateTestCasesForFile = generateTestCasesForFile;
 var github_1 = require("@actions/github");
 var languageModel_1 = require("./languageModel");
 var testValidator_1 = require("./testValidator");
