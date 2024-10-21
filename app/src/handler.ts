@@ -21,8 +21,9 @@ function registerFunctions() {
     description: 'Generate unit tests for a specific file',
     type: FunctionType.LLMWithRegisteredFunctionAndCodebase,
     execute: async (query: string, context: any) => {
-      const { repository, issue, comment } = context;
-      return generateUnitTestsPerFile(repository.full_name, issue.number.toString(), comment.path);
+      // repo: { owner: string, repo: string }, unitTestSourceFolder: string, filePath: string
+      const { repository, unitTestSourceFolder, filePath } = context;
+      return generateUnitTestsPerFile(repository, unitTestSourceFolder, filePath);
     }
   });
 
