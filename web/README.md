@@ -79,4 +79,7 @@ We are multiplexing the same code base in folder web to two different destinatio
 - GitHub Pages: using GitHub Actions to deploy the website to GitHub Pages. The workflow file is defined in `.github/workflows/github-pages.yml`, note to add create GitHub page in the repository settings and set gh-pages as the source branch.
 - Vercel: using Vercel to host the website. The configuration is in `vercel.json`.
 
-Note we add `.vercelignore` to configure Vercel to ignore the gh-pages branch entirely. thus avoid unnecessary build in Vercel.
+Note we add `.vercelignore` to configure Vercel to ignore the gh-pages branch entirely. thus avoid unnecessary build in Vercel, or add the following command in Vercel project settings -> "Git" -> "Ignored Build Step" -> "Custom":
+```
+if [ "$VERCEL_GIT_COMMIT_REF" = "gh-pages" ]; then echo "Skipping deploy for gh-pages branch"; exit 0; else exit 1; fi
+```
