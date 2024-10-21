@@ -73,3 +73,6 @@ Untracked files:
 
 Note the configuration in Vercel hosting platform also needed to be updated in "Settings" -> "Build & Development Settings" -> "Environment Variables"
 
+## Multiplex the website to GitHub Pages
+
+We use GitHub Actions to deploy the website to GitHub Pages. The workflow file is defined in `.github/workflows/github-pages.yml`.
