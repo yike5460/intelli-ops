@@ -1,11 +1,12 @@
 name: Deploy to GitHub Pages
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
     paths:
-      - '@web/**'  # Only trigger on changes in @web folder
+      - 'web/**'  # Only trigger on changes in @web folder
 
 jobs:
   deploy:
