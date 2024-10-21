@@ -75,4 +75,8 @@ Note the configuration in Vercel hosting platform also needed to be updated in "
 
 ## Multiplex the website to GitHub Pages
 
-We use GitHub Actions to deploy the website to GitHub Pages. The workflow file is defined in `.github/workflows/github-pages.yml`.
+We are multiplexing the same code base in folder web to two different destinations:
+- GitHub Pages: using GitHub Actions to deploy the website to GitHub Pages. The workflow file is defined in `.github/workflows/github-pages.yml`, note to add create GitHub page in the repository settings and set gh-pages as the source branch.
+- Vercel: using Vercel to host the website. The configuration is in `vercel.json`.
+
+Note we add `.vercelignore` to configure Vercel to ignore the gh-pages branch entirely. thus avoid unnecessary build in Vercel.
