@@ -30,7 +30,8 @@ jobs:
     - name: Export
       working-directory: ./web
       run: npx next export
-    # By adding an empty .nojekyll file to the root of your GitHub Pages branch, we tell GitHub not to process site with Jekyll, ensures that Next.js build is served exactly as it was built, also to preseving underscore prefixed directories
+
+    # By adding an empty .nojekyll file to the root of your GitHub Pages branch, we tell GitHub not to process site with Jekyll, ensures that Next.js build is served exactly as it was built, also to preserving underscore prefixed directories
     - name: Create .nojekyll file
       run: touch ./web/out/.nojekyll
 
@@ -39,4 +40,6 @@ jobs:
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./web/out
+        # This parameter specifies the branch where the built site will be published. By default, it's set to 'gh-pages', but you can uncomment and modify this line if you want to publish to a different branch. For most GitHub Pages deployments, using 'gh-pages' is the standard.
+        publish_branch: gh-pages
         force_orphan: true
