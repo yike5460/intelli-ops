@@ -52506,14 +52506,20 @@ async function generateCodeReviewComment(bedrockClient, modelId, octokit, exclud
                     // Calculate the actual position in the file
                     const hunkHeaderMatch = hunkLines[0] ? hunkLines[0].match(/^@@ -\d+,\d+ \+(\d+),/) : null;
                     const hunkStartLine = hunkHeaderMatch && hunkHeaderMatch[1] ? parseInt(hunkHeaderMatch[1]) : 1;
-                    // We add 1 to calculate the correct position because: 1. GitHub's API uses 1-based indexing for line numbers; 2. The position should account for the hunk header line
-                    const position = totalPosition + (startLine - hunkStartLine + 1);
+                    // Calculate the position relative to the hunk start
+                    const relativePosition = startLine - hunkStartLine;
+                    // We add 1 to calculate the correct position because:
+                    // 1. GitHub's API uses 1-based indexing for line numbers
+                    // 2. The position should account for the hunk header line
+                    const position = totalPosition + relativePosition + 1;
+                    // Ensure the position is not negative
+                    const finalPosition = Math.max(1, position);
                     // Prepend the header to each review comment
                     const reviewWithHeader = `${CODE_REVIEW_HEADER}\n\n${body}`;
                     // The position value equals the number of lines down from the first "@@" hunk header in the file you want to add a comment. The line just below the "@@" line is position 1, the next line is position 2, and so on. The position in the diff continues to increase through lines of whitespace and additional hunks until the beginning of a new file.
                     reviewComments.push({
                         path: file.filename,
-                        position: position,
+                        position: finalPosition,
                         body: reviewWithHeader,
                     });
                 }
