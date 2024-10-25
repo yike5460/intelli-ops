@@ -52478,7 +52478,7 @@ async function generateCodeReviewComment(bedrockClient, modelId, octokit, exclud
                     console.log("The full review skipped due to LGTM is: ", review);
                     continue;
                 }
-                console.log("Review for file: ", file.filename, "hunk index #", hunkIndex, ":\n", review);
+                // console.log("Review for file: ", file.filename, "hunk index #", hunkIndex, ":\n", review);
                 // Parse multiple comments from the review according to current prompt template, example output:
                 /*
                 8-8:
@@ -52500,6 +52500,7 @@ async function generateCodeReviewComment(bedrockClient, modelId, octokit, exclud
                 ```
                 */
                 const comments = parseReviewComments(review);
+                console.log("Parsed comments: ", comments);
                 for (const comment of comments) {
                     const { startLine, endLine, body } = comment;
                     // Calculate the actual position in the file
@@ -52525,6 +52526,7 @@ async function generateCodeReviewComment(bedrockClient, modelId, octokit, exclud
             ignoredFilesDetails.push(`${file.filename} is excluded by exclude rules`);
         }
     }
+    console.log("Review comments: ", reviewComments);
     // we always post the summary even if there is no review comments, so that we can let the user know the review level and the number of files processed
     if (reviewComments.length > 0 || additionalCommentsCount > 0) {
         let summaryTemplate = `
