@@ -212,7 +212,7 @@ export async function generateClassDiagram(repoFullName: string, packagePath: st
   const [owner, repo] = repoFullName.split('/');
   console.log('Generating class diagram for repo:', repoFullName, 'and package path:', packagePath);
 
-  async function searchDirectory(path: string): Promise<string[]> {
+  async function searchDirectory(path: string = ''): Promise<string[]> {
     try {
       const { data: contents } = await octokit.rest.repos.getContent({
         owner,
